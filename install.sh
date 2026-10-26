@@ -19,7 +19,6 @@ set -eu
 REPO="ayomidelog/vhdpeek"
 REF="${VHDPEEK_REF:-main}"
 PREFIX="${VHDPEEK_PREFIX:-$HOME/.local}"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/vhdpeek"
 UNINSTALL=0
 
 say()  { printf '%s\n' "$*"; }
@@ -55,11 +54,14 @@ while [ $# -gt 0 ]; do
 done
 
 BIN_DIR="$PREFIX/bin"
+# Everything lives under --prefix, so installing to /opt or /usr/local moves
+# the environment too, and --uninstall cleans up exactly one tree.
+DATA_DIR="$PREFIX/share/vhdpeek"
 
 # --- uninstall ------------------------------------------------------------
 
 if [ "$UNINSTALL" -eq 1 ]; then
-    rm -f "$BIN_DIR/vhdpeek" "$BIN_DIR/vhdpeek-gui"
+    rm -f "$BIN_DIR/vhdpeek" "$BIN_DIR/vhdpeek.exe"
     rm -rf "$DATA_DIR"
     say "Removed vhdpeek from $BIN_DIR and $DATA_DIR"
     exit 0
@@ -120,20 +122,40 @@ say "Installing into $DATA_DIR ..."
 mkdir -p "$DATA_DIR"
 "$PYTHON" -m venv --clear "$DATA_DIR/venv" || die "could not create a virtual environment"
 
-# `[http]` pulls in requests; the rest is standard library.
-"$DATA_DIR/venv/bin/python" -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
-"$DATA_DIR/venv/bin/python" -m pip install --quiet "$SRC[http]" \
-    || die "pip install failed"
+# `bin` on POSIX, `Scripts` on Windows - the script also runs under Git Bash.
+VENV_BIN="$DATA_DIR/venv/bin"
+[ -d "$VENV_BIN" ] || VENV_BIN="$DATA_DIR/venv/Scripts"
+[ -x "$VENV_BIN/python" ] || [ -x "$VENV_BIN/python.exe" ] \
+    || die "virtual environment has no interpreter"
+
+PY="$VENV_BIN/python"
+[ -x "$PY" ] || PY="$VENV_BIN/python.exe"
+
+# Installed in two steps: pip parses "/path/to/dir[extra]" as a requirement
+# name rather than a path, so the extra is passed as its own requirement.
+"$PY" -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
+"$PY" -m pip install --quiet "$SRC" || die "pip install failed"
+"$PY" -m pip install --quiet requests || die "could not install requests"
 
 mkdir -p "$BIN_DIR"
-ln -sf "$DATA_DIR/venv/bin/vhdpeek" "$BIN_DIR/vhdpeek"
-if [ -x "$DATA_DIR/venv/bin/vhdpeek-gui" ]; then
-    ln -sf "$DATA_DIR/venv/bin/vhdpeek-gui" "$BIN_DIR/vhdpeek-gui"
+# `.exe` first: MSYS resolves an extensionless path to it, which would
+# otherwise pick a name that does not exist on disk.
+src="$VENV_BIN/vhdpeek.exe"
+[ -e "$src" ] || src="$VENV_BIN/vhdpeek"
+
+COMMAND=""
+if [ -e "$src" ]; then
+    # Keep the real basename: on Windows the command is vhdpeek.exe, and a
+    # copy without the suffix would not run.
+    COMMAND="$BIN_DIR/${src##*/}"
+    rm -f "$COMMAND"
+    ln -sf "$src" "$COMMAND" 2>/dev/null || cp "$src" "$COMMAND"
 fi
+[ -n "$COMMAND" ] || die "the package did not install a vhdpeek command"
 
 say ""
-"$BIN_DIR/vhdpeek" --help >/dev/null 2>&1 \
-    || die "installed, but 'vhdpeek --help' failed"
+"$COMMAND" --help >/dev/null 2>&1 \
+    || die "installed, but '$COMMAND --help' failed"
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
@@ -147,4 +169,4 @@ say "Installed. Try:"
 say ""
 say "    vhdpeek disk.vhd --parts"
 say "    vhdpeek https://example.com/disk.vhdx --ls /etc"
-say "    vhdpeek-gui disk.vhd"
+say "    vhdpeek --gui disk.vhd"

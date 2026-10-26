@@ -10,6 +10,49 @@ from vhdpeek.gui import CancelToken, make_iid, render, split_iid
 from vhdpeek.gui.treeids import PLACEHOLDER
 
 
+class TestEntryPointArguments:
+    """
+    The portable exe is a windowed build: no console, no stdout. Its argument
+    handling must therefore never treat a flag as a filename.
+    """
+
+    def test_help_is_not_a_filename(self):
+        from vhdpeek.gui import _take_path
+
+        assert _take_path(["--help"]) is None
+        assert _take_path(["-h"]) is None
+
+    def test_a_path_is_taken(self):
+        from vhdpeek.gui import _take_path
+
+        assert _take_path(["disk.vhd"]) == "disk.vhd"
+        assert _take_path(["--help", "disk.vhd"]) == "disk.vhd"
+
+    def test_no_arguments(self):
+        from vhdpeek.gui import _take_path
+
+        assert _take_path([]) is None
+
+    def test_theme_is_extracted_before_the_path(self):
+        from vhdpeek.gui import _take_path, _take_theme
+
+        args = ["--theme", "dark", "disk.vhd"]
+        assert _take_theme(args) == "dark"
+        assert _take_path(args) == "disk.vhd"
+
+    def test_theme_equals_form(self):
+        from vhdpeek.gui import _take_theme
+
+        args = ["--theme=light"]
+        assert _take_theme(args) == "light"
+        assert args == []
+
+    def test_unknown_theme_value_is_ignored(self):
+        from vhdpeek.gui import _take_theme
+
+        assert _take_theme(["--theme", "chartreuse"]) is None
+
+
 class TestHelpers:
     def test_iid_round_trip(self):
         iid = make_iid("p3", "/etc/os-release")

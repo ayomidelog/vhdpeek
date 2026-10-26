@@ -1,7 +1,12 @@
 """
 vhdpeek GUI — explore a VHD/VHDX image without downloading or mounting it.
 
-    python -m vhdpeek --gui [image-or-url] [--theme dark|light]
+    vhdpeek --gui [image-or-url] [--theme dark|light]
+
+This is also what the portable Windows executable runs: it is a windowed
+build, so it has no console and no stdout. It therefore accepts an image path
+and `--theme`, ignores any other flag rather than mistaking it for a
+filename, and never prints.
 
 Nothing here parses anything: that all lives in `session.Session`.
 """
@@ -46,7 +51,7 @@ def _enable_dpi_awareness() -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     chosen = _take_theme(args)
-    initial = args[0] if args else None
+    initial = _take_path(args)
 
     _enable_dpi_awareness()
     root = tk.Tk()
@@ -68,6 +73,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()
     return 0
+
+
+def _take_path(args: List[str]) -> Optional[str]:
+    """
+    The image path, ignoring anything that looks like a flag.
+
+    A windowed build has nowhere to print usage, so `--help` must not be
+    treated as a filename - the window would open and then report that no
+    such file exists.
+    """
+    for arg in args:
+        if not arg.startswith("-"):
+            return arg
+    return None
 
 
 def _take_theme(args: List[str]) -> Optional[str]:

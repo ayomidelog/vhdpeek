@@ -147,9 +147,18 @@ def _vhd_footer(disk_type: int, current_size: int,
 
 
 def wrap_fixed_vhd(data: bytes) -> bytes:
-    """Fixed VHD: the disk data starts at file offset 0."""
-    padded = bytes(data) + b"\x00" * (-len(data) % SECTOR)
-    return padded + _vhd_footer(2, len(padded), 0xFFFFFFFFFFFFFFFF)
+    """
+    Fixed VHD: the disk data starts at file offset 0.
+
+    Built in one buffer. The four-partition fixture is a 200 MiB disk, and
+    concatenating bytes would hold several copies of it at once - enough to
+    fail on a machine that is busy, for no benefit.
+    """
+    padded = len(data) + (-len(data) % SECTOR)
+    out = bytearray(padded + SECTOR)
+    out[:len(data)] = data
+    out[padded:] = _vhd_footer(2, padded, 0xFFFFFFFFFFFFFFFF)
+    return bytes(out)
 
 
 def wrap_dynamic_vhd(data: bytes, block_size: int = 2 << 20) -> bytes:
@@ -289,7 +298,7 @@ def assemble_disk(fs_bytes: bytes, scheme: str = "mbr",
     disk = bytearray(disk_sectors * SECTOR)
     disk[:len(table)] = table
     disk[start_lba * SECTOR:start_lba * SECTOR + len(fs_bytes)] = fs_bytes
-    return bytes(disk)
+    return disk
 
 
 def wrap_sparse_vhd(blocks: Dict[int, bytes], virtual_size: int,
@@ -366,4 +375,4 @@ def assemble_disk_multi(partitions, scheme: str = "gpt",
     for (start, _fs, _mbr, _gpt, _name), (_, _end, _, _, _) in zip(partitions, spans):
         offset = start * SECTOR
         disk[offset:offset + len(_fs)] = _fs
-    return bytes(disk)
+    return disk

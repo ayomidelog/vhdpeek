@@ -1,12 +1,13 @@
 """
-Entry point for `python -m vhdpeek`.
+Entry point for `python -m vhdpeek`, the same program the `vhdpeek` command
+runs.
 
-    python -m vhdpeek <file-or-url> [--parts] [--part N]
-    python -m vhdpeek <file-or-url> --tree [--max-depth N]
-    python -m vhdpeek <file-or-url> --ls /var/log
-    python -m vhdpeek <file-or-url> --cat /etc/os-release > os-release
-    python -m vhdpeek <file-or-url> --iso /ubuntu.iso --ls /casper
-    python -m vhdpeek --gui [file-or-url]
+    vhdpeek <file-or-url> [--parts] [--part N]
+    vhdpeek <file-or-url> --tree [--max-depth N]
+    vhdpeek <file-or-url> --ls /var/log
+    vhdpeek <file-or-url> --cat /etc/os-release > os-release
+    vhdpeek <file-or-url> --iso /ubuntu.iso --ls /casper
+    vhdpeek --gui [file-or-url]
 
 An ISO that lives inside the partition's filesystem is mounted with `--iso`
 and then addressed like any other filesystem, without extracting it.

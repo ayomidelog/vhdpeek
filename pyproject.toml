@@ -34,8 +34,10 @@ dependencies = []
 http = ["requests>=2.28"]
 
 [project.scripts]
+# One command; `--gui` opens the window. The portable Windows exe is a
+# separate, windowed build of the same program - it has no console, so it
+# cannot offer this command line.
 vhdpeek = "vhdpeek.cli:main"
-vhdpeek-gui = "vhdpeek.gui:main"
 
 [project.urls]
 Homepage = "https://github.com/ayomidelog/vhdpeek"

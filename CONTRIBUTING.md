@@ -92,8 +92,8 @@ run needs fixing before merge.
 Include the output of:
 
 ```bash
-python -m vhdpeek --help
-python -m vhdpeek <image> --parts
+vhdpeek --help
+vhdpeek <image> --parts
 ```
 
 plus the container type, the filesystem, and what you expected to see. If the

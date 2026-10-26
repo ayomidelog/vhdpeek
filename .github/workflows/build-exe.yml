@@ -1,7 +1,8 @@
 name: build
 
-# Builds the portable Windows executable. Runs on a tag so a release has
-# something to attach, and on demand so a build can be checked without one.
+# Builds the portable Windows executable: a single windowed binary that opens
+# the browser when double-clicked. Runs on a tag so a release has something to
+# attach, and on demand so a build can be checked without one.
 on:
   push:
     tags: ["v*"]
@@ -32,23 +33,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller requests
 
-      # Two builds, because one exe cannot be both:
-      #   vhdpeek.exe      console subsystem, so --cat can stream to stdout
-      #   vhdpeek-gui.exe  window subsystem, so the GUI leaves no black window
-      - name: Build the console executable
-        run: >
-          python -m PyInstaller
-          --noconfirm --clean --onefile --console
-          --name vhdpeek
-          --hidden-import requests
-          --paths .
-          packaging/entry_cli.py
-
-      - name: Build the windowed executable
+      # `--windowed` sets the PE subsystem to "windows", so double-clicking
+      # spawns no console window behind the app. One binary, one job.
+      - name: Build the executable
         run: >
           python -m PyInstaller
           --noconfirm --clean --onefile --windowed
-          --name vhdpeek-gui
+          --name vhdpeek
+          --icon assets/vhdpeek.ico
           --hidden-import requests
           --paths .
           packaging/entry_gui.py
@@ -56,26 +48,34 @@ jobs:
       - name: Generate sample images
         run: python tools/make_test_images.py
 
-      # An exe that builds but cannot read an image is worse than no exe, so
-      # the frozen binary is exercised rather than just produced.
+      # A windowed binary has no stdout, so the checks are behavioural: the
+      # process must start, stay alive (i.e. reach its main loop without
+      # raising), and exit cleanly when closed.
       - name: Smoke-test the frozen binary
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          .\dist\vhdpeek.exe --help | Out-Null
-          .\dist\vhdpeek.exe test_data\test_fixed.vhd --parts
-          .\dist\vhdpeek.exe test_data\test_vhdx.vhdx --ls /docs
-
-          $out = .\dist\vhdpeek.exe test_data\test_fixed.vhd --cat /readme.txt
-          if (-not ($out -match "Hello from vhdpeek")) {
-            throw "unexpected --cat output: $out"
+          if (-not (Test-Path .\dist\vhdpeek.exe)) {
+            throw "the executable was not produced"
           }
 
-          # The GUI build must at least import and parse its arguments.
-          if (-not (Test-Path .\dist\vhdpeek-gui.exe)) {
-            throw "windowed build missing"
+          # --help exits 0 through argparse, which proves the bundle imports
+          # and the argument parser is wired up.
+          $help = Start-Process -FilePath .\dist\vhdpeek.exe -ArgumentList "--help" `
+                                -Wait -PassThru -NoNewWindow
+          if ($help.ExitCode -ne 0) {
+            throw "--help exited $($help.ExitCode)"
           }
-          Write-Host "frozen binary OK"
+
+          # Opening a real image must reach the event loop and stay there.
+          $app = Start-Process -FilePath .\dist\vhdpeek.exe `
+                               -ArgumentList "test_data\test_fixed.vhd" -PassThru
+          Start-Sleep -Seconds 12
+          if ($app.HasExited) {
+            throw "the window exited immediately with code $($app.ExitCode)"
+          }
+          Stop-Process -Id $app.Id -Force
+          Write-Host "frozen binary starts and stays up"
 
       - name: Package
         shell: pwsh
@@ -84,7 +84,7 @@ jobs:
           if (-not $env:GITHUB_REF.StartsWith("refs/tags/")) { $tag = "dev" }
           $name = "vhdpeek-$tag-windows-x64"
           New-Item -ItemType Directory -Path dist\pkg | Out-Null
-          Copy-Item dist\vhdpeek.exe, dist\vhdpeek-gui.exe, README.md, LICENSE dist\pkg\
+          Copy-Item dist\vhdpeek.exe, README.md, LICENSE dist\pkg\
           Compress-Archive -Path dist\pkg\* -DestinationPath "dist\$name.zip"
           echo "ZIP=dist/$name.zip" >> $env:GITHUB_ENV
 

@@ -8,10 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Portable Windows executables, built by
-  `.github/workflows/build-exe.yml` and attached to each tagged release:
-  `vhdpeek.exe` (console, so `--cat` can stream) and `vhdpeek-gui.exe`
-  (windowed). No Python install required; unzip and run.
+- `install.sh`: a one-line installer for Linux and macOS that puts the
+  `vhdpeek` command in `~/.local/bin` without touching the system Python.
+- `pyproject.toml`, so `pip install .` provides the `vhdpeek` command. There
+  is one command; `--gui` opens the window.
+- The app icon, generated from `assets/vhd_ico.png` by `tools/make_icon.py`
+  and embedded in the Windows executable. Images live under `assets/`.
+- A portable Windows executable, built by
+  `.github/workflows/build-exe.yml` and attached to each tagged release.
+  One windowed binary, `vhdpeek.exe`: no Python required, no console window
+  behind the app. The command line stays available through `pip install` and
+  `install.sh`.
 - Dark theme, with a **Theme** button and `Ctrl+T`. The window follows the
   desktop preference on first run and remembers the choice afterwards.
   `--theme dark|light` forces a scheme.

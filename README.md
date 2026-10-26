@@ -1,4 +1,4 @@
-# vhdpeek
+<img src="assets/vhdpeek.png" alt="VHDPeek" width="70%">
 
 [![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
@@ -15,29 +15,49 @@ the image without extracting it.
 ### Portable Windows exe
 
 No Python required. Download `vhdpeek-<version>-windows-x64.zip` from the
-[releases page](../../releases), unzip it anywhere, and run either binary:
+[releases page](../../releases) and unzip it anywhere. There is one binary,
+`vhdpeek.exe`: double-click it to open the window, or drag an image onto it.
 
-| Binary | Use it for |
-|---|---|
-| `vhdpeek-gui.exe` | double-click to open the window. Drag an image onto it, or pass a path |
-| `vhdpeek.exe` | the command line below. Keeps a console, so `--cat` can stream to stdout |
+It is a windowed build, so no console appears behind the app - which also
+means it has no stdout, so the command line lives in the installs below.
 
-The zip is a single self-contained file per binary — no installer, no
-registry, no files left behind. Delete the folder to uninstall. Builds come
-from [`.github/workflows/build-exe.yml`](.github/workflows/build-exe.yml) on
-every tagged release; each one is smoke-tested against generated images before
-it is attached.
+The exe is self-contained - no installer, no registry, no files left behind.
+Delete it to uninstall. Builds come from
+[`.github/workflows/build-exe.yml`](.github/workflows/build-exe.yml) on every
+tagged release, and each one is started against a real image before it is
+attached.
 
 ```
-vhdpeek-gui.exe D:\images\ubuntu.vhd
-vhdpeek.exe D:\images\ubuntu.vhd --parts
+vhdpeek.exe
+vhdpeek.exe D:\images\ubuntu.vhd
 ```
+
+
+### Linux and macOS
+
+One line, no clone:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ayomidelog/vhdpeek/main/install.sh | sh
+```
+
+That installs into a private virtual environment under
+`~/.local/share/vhdpeek` and links the `vhdpeek` command into `~/.local/bin`;
+nothing else on the system is touched. Undo it with the same
+script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ayomidelog/vhdpeek/main/install.sh \
+    | sh -s -- --uninstall
+```
+
 
 ### From source
 
 ```bash
 pip install requests        # only needed for http(s) sources
-python -m vhdpeek disk.vhd --parts
+pip install .               # installs the `vhdpeek` command
+python -m vhdpeek disk.vhd --parts   # or run it straight from a checkout
 ```
 
 Python 3.9+. Local files need no third-party packages. To build the exe
@@ -45,28 +65,30 @@ yourself:
 
 ```bash
 pip install pyinstaller requests
-python -m PyInstaller --onefile --console --name vhdpeek \
-    --hidden-import requests --paths . packaging/entry_cli.py
-python -m PyInstaller --onefile --windowed --name vhdpeek-gui \
+python -m PyInstaller --onefile --windowed --name vhdpeek \
+    --icon assets/vhdpeek.ico \
     --hidden-import requests --paths . packaging/entry_gui.py
 ```
 
 ## CLI
 
 ```bash
-python -m vhdpeek disk.vhd --parts        # what is inside?
-python -m vhdpeek disk.vhd                # walk the tree (default action)
-python -m vhdpeek disk.vhd --ls /var/log  # list one directory
-python -m vhdpeek disk.vhd --cat /etc/os-release
+vhdpeek disk.vhd --parts        # what is inside?
+vhdpeek disk.vhd                # walk the tree (default action)
+vhdpeek disk.vhd --ls /var/log  # list one directory
+vhdpeek disk.vhd --cat /etc/os-release
 
 # Over HTTP — only the needed ranges are fetched
-python -m vhdpeek https://example.com/disk.vhdx --max-depth 2
+vhdpeek https://example.com/disk.vhdx --max-depth 2
 
 # Enter an ISO stored inside the image's filesystem
-python -m vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso --ls /
-python -m vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso \
+vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso --ls /
+vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso \
     --cat /casper/initrd > initrd
 ```
+
+Every command also runs as `python -m vhdpeek ...` from a checkout, with
+nothing installed.
 
 | Flag | Meaning |
 |---|---|
@@ -79,6 +101,7 @@ python -m vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso \
 | `--iso PATH` | mount an ISO stored inside the filesystem |
 | `--fs KIND` | override detection: `auto`, `ntfs`, `fat`, `ext`, `iso` |
 | `--gui` | open the graphical browser |
+| `--theme` | GUI scheme: `dark` or `light` (default: follow the system) |
 
 Diagnostics go to stderr, so `--cat` output is byte-exact and safe to pipe into
 `sha256sum`, `tar`, or `qemu-system-x86_64 -kernel`.
@@ -86,13 +109,14 @@ Diagnostics go to stderr, so `--cat` output is byte-exact and safe to pipe into
 ## GUI
 
 ```bash
-python -m vhdpeek --gui                 # then open an image
-python -m vhdpeek --gui disk.vhd        # or start with one
+vhdpeek --gui                          # then open an image
+vhdpeek --gui disk.vhd                 # or start with one
+vhdpeek --gui disk.vhd --theme dark    # force a scheme
 ```
 
 An explorer. It opens on the image's partitions and stays there:
 
-![vhdpeek GUI](gui-screenshot.png)
+![vhdpeek GUI](assets/gui-screenshot.png)
 
 - **An ISO is a file, not a destination.** Expand the `.iso` and its contents
   appear underneath it, in place, so the on-disk structure stays visible. The
@@ -106,8 +130,11 @@ An explorer. It opens on the image's partitions and stays there:
   image costs a handful of requests rather than a full walk.
 - **Nothing blocks.** All filesystem work runs on one background thread, so a
   100 ms round trip never freezes the window.
+- **Light and dark.** Follows the desktop's preference on first run, then
+  remembers what you pick with **Theme** (`Ctrl+T`). Dialogs are centred over
+  the window that raised them.
 
-![Nested ISO](gui-screenshot-iso.png)
+![Nested ISO](assets/gui-screenshot-iso.png)
 
 | Key | Action |
 |---|---|
@@ -115,6 +142,7 @@ An explorer. It opens on the image's partitions and stays there:
 | `Ctrl+U` | open a URL |
 | `Ctrl+E` | copy out |
 | `F5` | reload |
+| `Ctrl+T` | switch light/dark |
 | `Esc` | cancel a running copy |
 
 ## Sparse mapping
@@ -274,15 +302,27 @@ tests/
 tools/
 ├── make_test_images.py   regenerate test_data/
 ├── make_ubuntu_image.py  60 GiB sparse VHD with a nested ISO
+├── make_icon.py          rebuild assets/vhdpeek.ico from the artwork
 └── bench.py              performance measurements
 
+pyproject.toml            packaging metadata; defines the command
+install.sh                curl-installable installer for Linux and macOS
+
+assets/
+├── vhdpeek.png           logo
+├── vhd_ico.png           icon source artwork
+├── vhdpeek.ico           generated by tools/make_icon.py
+├── gui-screenshot.png    README screenshots
+├── gui-screenshot-iso.png
+├── gui-dark.png
+└── gui-light.png
+
 packaging/
-├── entry_cli.py          frozen console entry point
-└── entry_gui.py          frozen windowed entry point
+└── entry_gui.py          frozen entry point for the windowed exe
 
 .github/workflows/
 ├── tests.yml             CI: 3 OSes x 5 Python versions, plus a CLI smoke job
-└── build-exe.yml         portable Windows binaries, attached to a release
+└── build-exe.yml         the portable Windows binary, attached to a release
 ```
 
 
@@ -295,19 +335,8 @@ and the two rules that matter:
 - **Fixtures come from the spec, not from the reader.** Parsing bytes you just
   wrote proves nothing.
 
-The house style is short: one job per module, no module over 400 lines, and
-layers only call downwards (`core` → `fs` → `session` → `cli`/`gui`).
-
 Report security issues through [SECURITY.md](SECURITY.md) rather than the
 issue tracker.
 
-## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). The current release is **0.1.0**: VHD/VHDX
-browsing over HTTP, MBR and GPT, FAT/NTFS/ext4/ISO readers, nested ISOs, the
-Tk explorer with copy-out, and the CLI. Note that the project was renamed from
-`vhdurl`, so anything importing `vhdurl.*` needs to switch to `vhdpeek.*`.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+## By [ayomidelog](https://github.com/ayomidelog)
