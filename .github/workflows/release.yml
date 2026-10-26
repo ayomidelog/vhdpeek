@@ -139,7 +139,10 @@ jobs:
           PY
 
           cp assets-downloaded/dist/* release/
-          cp assets-downloaded/release-notes/notes.md release/
+
+          # The notes are passed to `gh release create` as a file, not
+          # uploaded as an asset, so they stay out of the download list.
+          cp assets-downloaded/release-notes/notes.md notes.md
           ls -l release/
         env:
           VERSION: ${{ needs.validate.outputs.version }}
@@ -150,8 +153,15 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.validate.outputs.version }}"
-          gh release create "$GITHUB_REF_NAME" \
-            --title "vhdpeek $version" \
-            --notes-file release/notes.md \
-            --verify-tag \
-            release/*
+          # Idempotent: a re-run after a partial failure repairs the
+          # existing release rather than dying on "already exists".
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "vhdpeek $version" \
+              --notes-file notes.md \
+              --verify-tag \
+              release/*
+          fi

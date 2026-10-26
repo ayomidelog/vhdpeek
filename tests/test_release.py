@@ -217,6 +217,18 @@ class TestWorkflows:
         text = self.workflow("release.yml")
         assert 'z.write(src, "vhdpeek.exe")' in text
 
+    def test_the_notes_are_not_uploaded_as_an_asset(self):
+        """The notes belong in the release body, not the download list."""
+        text = self.workflow("release.yml")
+        assert "--notes-file notes.md" in text
+        assert "release/notes.md" not in text
+
+    def test_publishing_is_idempotent(self):
+        """A re-run must repair a partial release, not fail on 'exists'."""
+        text = self.workflow("release.yml")
+        assert 'if gh release view "$GITHUB_REF_NAME"' in text
+        assert "--clobber" in text
+
     def test_assets_are_named_from_the_version(self):
         """A release asset must not carry a hardcoded version."""
         text = self.workflow("release.yml")
