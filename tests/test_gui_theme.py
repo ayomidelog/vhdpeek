@@ -134,6 +134,13 @@ class TestUrlDialog:
         app.root.geometry("900x600+300+200")
         app.root.update_idletasks()
 
+        # Without a window manager (a bare X server, e.g. Xvfb) the window is
+        # never mapped, so its geometry is a placeholder and there is nothing
+        # to centre against. The pure `centered_position` tests cover the
+        # arithmetic; this one checks it reaches the widget.
+        if app.root.winfo_width() <= 1:
+            pytest.skip("no window manager: the parent has no geometry")
+
         prompt = urldialog.ask(app.root, app.palette, lambda _url: None)
         try:
             app.root.update_idletasks()
