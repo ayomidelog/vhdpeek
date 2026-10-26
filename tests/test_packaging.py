@@ -115,6 +115,86 @@ class TestConsoleScripts:
         assert command_main is module_main
 
 
+class TestPython39Compatibility:
+    """
+    The suite runs on 3.9, so nothing may use an API added later.
+
+    This caught `Path.write_text(newline=...)` (3.10+) after it reached CI,
+    where only the 3.9 jobs failed. A cheap scan here is better than waiting
+    for the matrix.
+    """
+
+    #: (source fragment, the version that introduced it)
+    FORBIDDEN = [
+        ("write_text(", "check the `newline` keyword: it is 3.10+"),
+        ("read_text(", "check the `newline` keyword: it is 3.10+"),
+        ("slots=True", "dataclass slots are 3.10+"),
+        ("ExceptionGroup", "3.11+"),
+        ("except*", "3.11+"),
+        ("tomllib", "3.11+"),
+        ("itertools.pairwise", "3.10+"),
+        ("datetime.UTC", "3.11+"),
+        ("int.bit_count", "3.10+"),
+        ("typing.Self", "3.11+"),
+    ]
+
+    def sources(self):
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        this_file = pathlib.Path(__file__).resolve()
+        for folder in ("vhdpeek", "tests", "tools", "packaging"):
+            for path in (root / folder).rglob("*.py"):
+                # This module names the forbidden fragments in its own table.
+                if path.resolve() != this_file:
+                    yield path
+
+    def test_no_post_39_api_in_an_obvious_form(self):
+        problems = []
+        for path in self.sources():
+            text = path.read_text(encoding="utf-8")
+            for fragment, why in self.FORBIDDEN:
+                if fragment not in text:
+                    continue
+                # `write_text(...)`/`read_text(...)` are fine without the
+                # keyword; only flag a call that passes `newline=`. Comments
+                # and strings are skipped, so the note explaining this in
+                # release.py is not itself a violation.
+                if fragment in ("write_text(", "read_text("):
+                    import io
+                    import tokenize
+
+                    try:
+                        tokens = list(tokenize.generate_tokens(
+                            io.StringIO(text).readline))
+                    except tokenize.TokenError:      # pragma: no cover
+                        continue
+                    for index, token in enumerate(tokens):
+                        if token.type != tokenize.NAME or token.string != \
+                                fragment.rstrip("("):
+                            continue
+                        rest = "".join(t.string for t in tokens[index:index + 12])
+                        if "newline" in rest:
+                            problems.append(
+                                f"{path.name}:{token.start[0]} "
+                                f"{fragment}...newline= ({why})")
+                    continue
+                problems.append(f"{path.name}: {fragment} ({why})")
+        assert not problems, "\n".join(problems)  # noqa: E501
+
+    def test_sources_parse_as_python_39(self):
+        import ast
+
+        for path in self.sources():
+            source = path.read_text(encoding="utf-8")
+            try:
+                ast.parse(source, filename=str(path), feature_version=(3, 9))
+            except SyntaxError as exc:
+                raise AssertionError(
+                    f"{path}: not valid 3.9 syntax ({exc.msg} at line "
+                    f"{exc.lineno})") from None
+
+
 class TestVersionFlag:
     """`--version` must report what the package actually is."""
 

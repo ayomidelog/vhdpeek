@@ -225,8 +225,9 @@ def main(argv: Optional[list] = None) -> int:
             if args.out == "-":
                 print(body)
             else:
-                Path(args.out).write_text(body + "\n", encoding="utf-8",
-                                          newline="\n")
+                # `Path.write_text(newline=...)` is 3.10+; write the bytes
+                # directly so a checkout on 3.9 produces LF endings too.
+                Path(args.out).write_bytes((body + "\n").encode("utf-8"))
                 print(f"wrote {args.out}")
     except ReleaseError as exc:
         print(f"error: {exc}", file=sys.stderr)
