@@ -51,11 +51,19 @@ class TestProjectMetadata:
         assert re.search(r'^version = "\d+\.\d+\.\d+"$', text, re.M)
 
     def test_python_floor_matches_the_readme(self):
+        """
+        The README states the floor in prose or in the badge; either is fine,
+        but it must not advertise a different one from `requires-python`.
+        """
         text = read_pyproject()
         match = re.search(r'^requires-python = ">=(\d+)\.(\d+)"$', text, re.M)
         assert match
+        floor = f"{match.group(1)}.{match.group(2)}"
+
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        assert f"Python {match.group(1)}.{match.group(2)}+" in readme
+        assert (f"Python {floor}+" in readme
+                or f"python-{floor}" in readme), \
+            f"README does not state Python {floor}"
 
     def test_license_is_declared(self):
         assert re.search(r'^license = \{ text = "MIT" \}$',
