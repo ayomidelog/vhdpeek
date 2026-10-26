@@ -1,10 +1,12 @@
-<img src="assets/vhdpeek.png" alt="VHDPeek" width="80%">
+<p align="center">
+  <img src="assets/vhdpeek.png" alt="VHDPeek" width="600">
+</p>
 
-[![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
-[![python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
-[![build](../../actions/workflows/build-exe.yml/badge.svg)](../../actions/workflows/build-exe.yml)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![formats](https://img.shields.io/badge/formats-VHD%20%7C%20VHDX%20%7C%20FAT%20%7C%20NTFS%20%7C%20ext4%20%7C%20ISO%209660-lightgrey)](#supported-formats)
+<p align="center">
+  <a href="../../actions/workflows/tests.yml"><img src="../../actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
+</p>
 
 Browse a VHD/VHDX disk image over HTTP or from a local file — no download, no
 mount. Walks partitions and filesystems, and enters an ISO that lives *inside*
@@ -12,166 +14,72 @@ the image without extracting it.
 
 ## Install
 
-### Portable Windows exe
+**Windows** — take `vhdpeek-<version>-windows-x64.exe` from the
+[releases page](../../releases) and run it. No Python, no installer, nothing
+written outside the file. The `.zip` is the same binary, archived.
 
-From the [releases page](../../releases), take either
-`vhdpeek-<version>-windows-x64.exe` and run it, or the `.zip` and unzip it
-somewhere permanent. There is one binary, `vhdpeek.exe`: double-click it to
-open the window, or drag an image onto it.
-
-The exe is self-contained - no installer, no registry, no files left behind.
-Delete it to uninstall. Builds come from
-[`.github/workflows/build-exe.yml`](.github/workflows/build-exe.yml) on every
-tagged release, and each one is started against a real image before it is
-attached.
-
-```
-vhdpeek.exe
-vhdpeek.exe D:\images\ubuntu.vhd
-```
-
-
-### Linux and macOS
-
-One line, no clone:
+**Linux and macOS** — one line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ayomidelog/vhdpeek/main/install.sh | sh
 ```
 
-That installs into a private virtual environment under
-`~/.local/share/vhdpeek` and links the `vhdpeek` command into `~/.local/bin`;
-nothing else on the system is touched. Undo it with the same
-script:
+Installs into `~/.local/share/vhdpeek` and links `vhdpeek` into `~/.local/bin`.
+Undo with the same script and `--uninstall`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ayomidelog/vhdpeek/main/install.sh \
-    | sh -s -- --uninstall
-```
-
-
+**Anywhere** — `pip install .` from a checkout, or `python -m vhdpeek` with
+nothing installed. Python 3.9+; `requests` only for `http(s)` sources.
 
 ## CLI
 
 ```bash
-vhdpeek disk.vhd --parts        # what is inside?
-vhdpeek disk.vhd                # walk the tree (default action)
-vhdpeek disk.vhd --ls /var/log  # list one directory
+vhdpeek disk.vhd --parts        # partitions
+vhdpeek disk.vhd                # tree (default)
+vhdpeek disk.vhd --ls /var/log  # one directory
 vhdpeek disk.vhd --cat /etc/os-release
 
-# Over HTTP — only the needed ranges are fetched
 vhdpeek https://example.com/disk.vhdx --max-depth 2
 
-# Enter an ISO stored inside the image's filesystem
 vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso --ls /
-vhdpeek ubuntu.vhd --iso /casper/ubuntu-24.04-desktop-amd64.iso \
-    --cat /casper/initrd > initrd
 ```
 
-Every command also runs as `python -m vhdpeek ...` from a checkout, with
-nothing installed.
+`--part N` picks a partition, `--fs` overrides detection, `--max-depth N`
+limits the walk. `vhdpeek --help` lists everything.
 
-| Flag | Meaning |
-|---|---|
-| `--parts` | list partitions and stop |
-| `--part N` | partition index (default: first with a recognisable filesystem) |
-| `--tree` | print the directory tree (the default) |
-| `--max-depth N` | tree depth limit (default 3) |
-| `--ls PATH` | list one directory |
-| `--cat PATH` | stream a file to stdout |
-| `--iso PATH` | mount an ISO stored inside the filesystem |
-| `--fs KIND` | override detection: `auto`, `ntfs`, `fat`, `ext`, `iso` |
-| `--gui` | open the graphical browser |
-| `--theme` | GUI scheme: `dark` or `light` (default: follow the system) |
-
-Diagnostics go to stderr, so `--cat` output is byte-exact and safe to pipe into
-`sha256sum`, `tar`, or `qemu-system-x86_64 -kernel`.
-
-### When it cannot open the image
-
-A wrong path, an unreachable host and a 404 are reported as such, with a hint
-and a distinct exit code — no traceback:
-
-```
-$ vhdpeek /tmp/nope.vhd --parts
-error: no such file: /tmp/nope.vhd
-hint:  check the path, or pass an http(s) URL instead
-$ echo $?
-2
-```
-
-| Exit | Meaning |
-|---|---|
-| 0 | success |
-| 1 | the image opened, but the request could not be satisfied (no such partition, unrecognised filesystem) |
-| 2 | the image could not be read: bad path, bad URL, unreachable host, HTTP error, not a VHD/VHDX |
-
-The message distinguishes the cases that are easy to confuse: a refused
-connection is `cannot reach <host>`, not "the server did not report a size";
-a 403 says access was denied, a 404 says the path does not exist. The GUI
-shows the same text in its status bar.
+Diagnostics go to stderr, so `--cat` is byte-exact and pipeable into
+`sha256sum`, `tar` or `qemu-system-x86_64 -kernel`. Bad input is reported
+rather than raised — `error: no such file: x.vhd`, a hint, and exit `2`
+(`1` = opened but the request failed, `0` = success).
 
 ## GUI
 
 ```bash
-vhdpeek --gui                          # then open an image
-vhdpeek --gui disk.vhd                 # or start with one
-vhdpeek --gui disk.vhd --theme dark    # force a scheme
+vhdpeek --gui disk.vhd
 ```
-
-An explorer. It opens on the image's partitions and stays there:
 
 ![vhdpeek GUI](assets/gui-screenshot.png)
 
-- **An ISO is a file, not a destination.** Expand the `.iso` and its contents
-  appear underneath it, in place, so the on-disk structure stays visible. The
-  partition above is untouched — collapse the ISO to go back.
-- **Copy out.** Select a file or folder and **Copy out…**. Folders are copied
-  recursively, keeping their structure, with progress and a cancel button.
-  Works for anything reachable, including files inside a mounted ISO.
-- **Preview.** Text renders as text, anything else as a hex dump; the first
-  64 KiB is read.
-- **Lazy.** A directory is only read when you expand it, so opening a 60 GiB
-  image costs a handful of requests rather than a full walk.
-- **Nothing blocks.** All filesystem work runs on one background thread, so a
-  100 ms round trip never freezes the window.
-- **Light and dark.** Follows the desktop's preference on first run, then
-  remembers what you pick with **Theme** (`Ctrl+T`). Dialogs are centred over
-  the window that raised them.
+Opens on the partition table and stays there. Expand a partition to list it.
+Expand an `.iso` and its contents appear underneath the file, in place, with
+the partition still above it. Directories are read only when expanded, and
+all filesystem work runs off the UI thread.
 
 ![Nested ISO](assets/gui-screenshot-iso.png)
 
-| Key | Action |
-|---|---|
-| `Ctrl+O` | open a file |
-| `Ctrl+U` | open a URL |
-| `Ctrl+E` | copy out |
-| `F5` | reload |
-| `Ctrl+T` | switch light/dark |
-| `Esc` | cancel a running copy |
+Copy a file or folder out with `Ctrl+E`; folders are copied recursively, with
+progress and cancellation. Preview shows text as text and anything else as a
+hex dump. **Theme** (`Ctrl+T`) follows the desktop on first run, then
+remembers your choice.
 
-## Sparse mapping
-
-`VHDInfo.read` maps a virtual offset to a file offset, coalescing contiguous
-runs so one run becomes one HTTP request:
-
-| Container | Mapping |
-|---|---|
-| fixed VHD | offset used directly; footer at end |
-| dynamic / differencing | BAT entry per 2 MiB block, skipping the block's 512-byte sector bitmap; `0xFFFFFFFF` = hole |
-| VHDX | BAT entry per 1 MiB block; state in bits 0–2, file offset in MiB in bits 20–63 |
-
-Holes and the tail past the virtual size read as zeros, so the layers above
-never see a short read. The BAT is read a 4 KiB page at a time, so a 60 GiB
-dynamic disk with a large BAT is never loaded wholesale.
+`Ctrl+O` file · `Ctrl+U` URL · `Ctrl+E` copy out · `F5` reload · `Ctrl+T` theme · `Esc` cancel
 
 ## Supported formats
 
-| Layer | Format | Detail |
+| Layer | Format | Notes |
 |---|---|---|
 | Container | VHD fixed | data at offset 0, footer at end |
-| | VHD dynamic / differencing | `cxsparse` header, BAT, sector bitmaps |
-| | VHDX | region table, metadata region, BAT; 512/4096 logical sectors |
+| | VHD dynamic / differencing | `cxsparse` header, BAT, sector bitmaps; one BAT entry per 2 MiB block |
+| | VHDX | region table, metadata region, BAT; one entry per 1 MiB block, state in bits 0–2, file offset in MiB in bits 20–63 |
 | Partition | MBR | four primaries plus the extended/logical EBR chain |
 | | GPT | protective MBR, header at LBA 1, 128-byte entries |
 | Filesystem | FAT12/16/32 | BPB, on-demand FAT (64-sector LRU), LFN, 8.3 case flags, FAT12 nibbles |
@@ -179,10 +87,15 @@ dynamic disk with a large BAT is never loaded wholesale.
 | | ext2/3/4 | extent trees, 64-bit group descriptors, filetype dirs |
 | | ISO 9660 | PVD, Joliet, Rock Ridge (SUSP incl. `CE`/`CL`/`RE`/`SK`), multi-extent files |
 
+A read maps a virtual offset to a file offset, coalescing contiguous runs so
+one run becomes one HTTP request. Holes and the tail past the virtual size read
+as zeros, so the layers above never see a short read. The BAT is read a 4 KiB
+page at a time, so a 60 GiB dynamic disk is never loaded wholesale.
+
 Differencing disks and VHDX files with a parent are detected and reported
 (`has_parent`, `parent_name`), but the parent chain is **not** resolved: a
 block that lives in the parent reads as zeros. A VHDX whose log is not empty
-sets `is_dirty`, and the CLI warns — the log is not replayed.
+sets `is_dirty` and the CLI warns — the log is not replayed.
 
 ## Performance
 
