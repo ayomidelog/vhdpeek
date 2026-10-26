@@ -328,6 +328,7 @@ tools/
 ├── make_test_images.py   regenerate test_data/
 ├── make_ubuntu_image.py  60 GiB sparse VHD with a nested ISO
 ├── make_icon.py          rebuild assets/vhdpeek.ico from the artwork
+├── release.py            tag/version checks and release notes
 └── bench.py              performance measurements
 
 pyproject.toml            packaging metadata; defines the command
@@ -347,9 +348,51 @@ packaging/
 
 .github/workflows/
 ├── tests.yml             CI: 3 OSes x 5 Python versions, plus a CLI smoke job
-└── build-exe.yml         the portable Windows binary, attached to a release
+├── build-exe.yml         the portable Windows binary (reusable)
+└── release.yml           tag -> validate, test, build, publish
 ```
 
+
+## Releasing
+
+A tag is the only trigger:
+
+```bash
+# 1. move [Unreleased] entries into a dated section
+#    ## [0.2.0] - 2026-11-02
+# 2. set the same version in pyproject.toml
+git commit -am "chore: release 0.2.0"
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`release.yml` then:
+
+1. **validates** — the tag must match `pyproject.toml`, and the changelog must
+   have a non-empty section for that version. This fails in seconds, before
+   any runner time is spent;
+2. **runs the test suite** on the tag, so nothing untested is published;
+3. **builds** the Windows exe, the sdist and the wheel, and checks that the
+   sdist installs on its own;
+4. **creates the GitHub release**, titled from the tag and described with the
+   changelog section, attaching:
+
+| Asset | What it is |
+|---|---|
+| `vhdpeek-<version>-windows-x64.zip` | the portable exe, unzip and run |
+| `vhdpeek-<version>.tar.gz` | source distribution |
+| `vhdpeek-<version>-py3-none-any.whl` | wheel |
+
+Nothing is published anywhere but GitHub. Releases are created with the
+workflow's own token, so no secrets are needed.
+
+The checks run locally too, which is the point of putting them in
+`tools/release.py` rather than in YAML:
+
+```bash
+python tools/release.py check --tag v0.2.0   # warn if [Unreleased] is not empty
+python tools/release.py notes --version 0.2.0
+```
 
 ## Contributing
 

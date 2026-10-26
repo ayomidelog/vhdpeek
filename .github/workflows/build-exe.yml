@@ -1,15 +1,21 @@
 name: build
 
 # Builds the portable Windows executable: a single windowed binary that opens
-# the browser when double-clicked. Runs on a tag so a release has something to
-# attach, and on demand so a build can be checked without one.
+# the browser when double-clicked.
+#
+# It does not create releases - `release.yml` owns that, and calls this
+# workflow. This one can also be run on demand to check that a build still
+# works without tagging anything.
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
+    outputs:
+      artifact:
+        description: Name of the uploaded artifact
+        value: vhdpeek-windows-x64
   workflow_dispatch:
 
 permissions:
-  contents: write        # needed to attach the zip to a release
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -59,14 +65,6 @@ jobs:
             throw "the executable was not produced"
           }
 
-          # --help exits 0 through argparse, which proves the bundle imports
-          # and the argument parser is wired up.
-          $help = Start-Process -FilePath .\dist\vhdpeek.exe -ArgumentList "--help" `
-                                -Wait -PassThru -NoNewWindow
-          if ($help.ExitCode -ne 0) {
-            throw "--help exited $($help.ExitCode)"
-          }
-
           # Opening a real image must reach the event loop and stay there.
           $app = Start-Process -FilePath .\dist\vhdpeek.exe `
                                -ArgumentList "test_data\test_fixed.vhd" -PassThru
@@ -77,33 +75,9 @@ jobs:
           Stop-Process -Id $app.Id -Force
           Write-Host "frozen binary starts and stays up"
 
-      - name: Package
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if (-not $env:GITHUB_REF.StartsWith("refs/tags/")) { $tag = "dev" }
-          $name = "vhdpeek-$tag-windows-x64"
-          New-Item -ItemType Directory -Path dist\pkg | Out-Null
-          Copy-Item dist\vhdpeek.exe, README.md, LICENSE dist\pkg\
-          Compress-Archive -Path dist\pkg\* -DestinationPath "dist\$name.zip"
-          echo "ZIP=dist/$name.zip" >> $env:GITHUB_ENV
-
       - name: Upload the portable build
         uses: actions/upload-artifact@v4
         with:
           name: vhdpeek-windows-x64
-          path: ${{ env.ZIP }}
+          path: dist/vhdpeek.exe
           if-no-files-found: error
-
-      - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title $tag --generate-notes
-          }
-          gh release upload $tag $env:ZIP --clobber

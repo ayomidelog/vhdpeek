@@ -1,0 +1,149 @@
+name: release
+
+# Cutting a release:
+#
+#   1. move the CHANGELOG entries from [Unreleased] into a new
+#      "## [x.y.z] - YYYY-MM-DD" section
+#   2. set the same version in pyproject.toml
+#   3. git commit, then: git tag vX.Y.Z && git push origin vX.Y.Z
+#
+# The tag is the single trigger. Everything else - the checks, the test suite,
+# the executable, the sdist and wheel, the release page - follows from it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write        # create the release and attach assets
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false    # never cancel a half-published release
+
+jobs:
+  # Fail in seconds, before spending runner time, if the tag and the metadata
+  # disagree or the changelog has no section for this version.
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Tag, version and changelog must agree
+        id: check
+        run: |
+          python tools/release.py check --tag "$GITHUB_REF_NAME"
+          echo "version=$(python -c 'import tools.release as r; print(r.project_version())')" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Extract the release notes
+        run: python tools/release.py notes --version "${{ steps.check.outputs.version }}" --out notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+          if-no-files-found: error
+
+  # Nothing ships unless the suite passes on the tag itself.
+  test:
+    name: Test
+    needs: validate
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    name: Build
+    needs: validate
+    uses: ./.github/workflows/build-exe.yml
+
+  dist:
+    name: sdist and wheel
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Check the metadata
+        run: python -m pip install --upgrade twine && python -m twine check dist/*
+
+      # The sdist must be installable on its own: a missing module in
+      # `[tool.setuptools.packages.find]` only shows up here.
+      - name: Install from the sdist and run it
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/python -m pip install --quiet dist/*.tar.gz
+          /tmp/check/bin/python -c "import vhdpeek; print(vhdpeek.__doc__)"
+          /tmp/check/bin/vhdpeek --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [validate, test, build, dist]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect the assets
+        uses: actions/download-artifact@v4
+        with:
+          path: assets-downloaded
+
+      - name: Assemble the assets
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+
+          # The exe ships zipped, as one file to download and unzip; the
+          # sdist and wheel ship as built. `zipfile` rather than the `zip`
+          # binary, which is not on every runner image.
+          python - <<'PY'
+          import os, zipfile
+          version = os.environ["VERSION"]
+          src = "assets-downloaded/vhdpeek-windows-x64/vhdpeek.exe"
+          dst = f"release/vhdpeek-{version}-windows-x64.zip"
+          os.makedirs("release", exist_ok=True)
+          with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+              z.write(src, "vhdpeek.exe")
+          print(f"{dst}: {os.path.getsize(dst):,} bytes")
+          PY
+
+          cp assets-downloaded/dist/* release/
+          cp assets-downloaded/release-notes/notes.md release/
+          ls -l release/
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "vhdpeek $version" \
+            --notes-file release/notes.md \
+            --verify-tag \
+            release/*
