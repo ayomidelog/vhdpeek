@@ -1,0 +1,98 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        exclude:
+          # The full interpreter range runs on Linux; the other platforms are
+          # there to catch platform-specific behaviour, so one recent version
+          # each is enough.
+          - { os: windows-latest, python: "3.10" }
+          - { os: windows-latest, python: "3.11" }
+          - { os: windows-latest, python: "3.12" }
+          - { os: macos-latest, python: "3.9" }
+          - { os: macos-latest, python: "3.10" }
+          - { os: macos-latest, python: "3.11" }
+          - { os: macos-latest, python: "3.12" }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      # The GUI tests drive real Tk widgets and skip when no display is
+      # available. A virtual display lets them actually run on Linux.
+      - name: Install a virtual display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb tk
+
+      - name: Lint
+        run: python -m pyflakes vhdpeek tests tools
+
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m pytest tests -q -rs
+
+      - name: Test (Windows, macOS)
+        if: runner.os != 'Linux'
+        run: python -m pytest tests -q -rs
+
+  # Generate the sample images and drive the real CLI, so the commands in the
+  # README are proven to work and not just the unit tests.
+  smoke:
+    name: CLI smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - run: python -m pip install requests
+
+      - name: Generate sample images
+        run: |
+          python tools/make_test_images.py
+          python tools/make_ubuntu_image.py
+
+      - name: Exercise the CLI
+        run: |
+          set -eux
+          python -m vhdpeek test_data/test_fixed.vhd --parts
+          python -m vhdpeek test_data/test_fixed.vhd --max-depth 2
+          python -m vhdpeek test_data/test_vhdx.vhdx --ls /docs
+          python -m vhdpeek test_data/test_fixed.vhd --cat /readme.txt \
+            | grep -q "Hello from vhdpeek"
+          python -m vhdpeek test_data/ubuntu.vhd \
+            --iso /casper/ubuntu-24.04-desktop-amd64.iso --ls /

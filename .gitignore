@@ -1,0 +1,22 @@
+# Generated disk images (tools/make_test_images.py, tools/make_ubuntu_image.py)
+test_data/
+bench_data/
+*.vhd
+*.vhdx
+*.img
+*.iso
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

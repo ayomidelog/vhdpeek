@@ -1,0 +1,17 @@
+# Development and test dependencies.
+#
+#   pip install -r requirements-dev.txt
+#
+# The runtime package itself needs nothing beyond the standard library, and
+# `requests` only for http(s) sources.
+
+pytest>=7.0
+requests>=2.28
+pyflakes>=3.0
+
+# Independent readers used to validate the image generators in
+# tests/test_generators.py. The tests skip cleanly when these are absent.
+pyfatfs>=0.0.8
+pycdlib>=1.13
+dissect.extfs>=3.0
+dissect.ntfs>=3.0
