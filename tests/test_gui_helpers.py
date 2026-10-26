@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("tkinter", reason="GUI tests need Tk")
 
 from vhdpeek.gui import CancelToken, make_iid, render, split_iid
+from vhdpeek.gui.treeids import PLACEHOLDER
 
 
 class TestHelpers:
@@ -16,6 +17,21 @@ class TestHelpers:
 
     def test_root_iid_round_trip(self):
         assert split_iid(make_iid("iso1", "")) == ("iso1", "")
+
+    def test_ids_contain_no_nul(self):
+        """
+        Tcl truncates strings at NUL on Python <= 3.11, so an id with a NUL
+        byte silently becomes its parent's id and the tree raises
+        "Item ... already exists" instead of inserting a placeholder.
+        """
+        for iid in (make_iid("p0", ""), make_iid("p3", "/etc/os-release"),
+                    make_iid("p0", "") + PLACEHOLDER):
+            assert "\x00" not in iid
+
+    def test_placeholder_id_is_distinct_from_its_parent(self):
+        parent = make_iid("p0", "")
+        assert parent + PLACEHOLDER != parent
+        assert split_iid(parent + PLACEHOLDER)[0] == "p0"
 
     def test_render_text(self):
         assert render(b"hello\nworld\n") == "hello\nworld\n"

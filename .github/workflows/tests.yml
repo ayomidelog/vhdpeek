@@ -17,6 +17,10 @@ jobs:
   test:
     name: ${{ matrix.os }} · py${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    # A hung test should fail in minutes, not occupy a runner for the default
+    # six hours. (A Tk call on a display-less macOS runner once did exactly
+    # that.)
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +37,8 @@ jobs:
           - { os: macos-latest, python: "3.10" }
           - { os: macos-latest, python: "3.11" }
           - { os: macos-latest, python: "3.12" }
+          # macOS has no window server, so the GUI tests skip there anyway;
+          # it earns its place by covering the POSIX paths of the readers.
 
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +78,7 @@ jobs:
   smoke:
     name: CLI smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

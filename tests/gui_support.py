@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import time
 
+from vhdpeek.gui.treeids import PLACEHOLDER
+
 from tests.support import SAMPLE
 
 UBUNTU_LIKE = {
@@ -61,7 +63,7 @@ def child(app, parent: str, name: str) -> str:
 
 def listed(app, iid: str) -> bool:
     """True once `iid` has been loaded: no placeholder child remains."""
-    return not any("\x00more" in c for c in app.tree.get_children(iid))
+    return not any(PLACEHOLDER in c for c in app.tree.get_children(iid))
 
 
 def open_and_wait(app, path: str) -> None:

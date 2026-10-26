@@ -11,7 +11,13 @@ from __future__ import annotations
 from typing import Tuple
 
 SEP = "\x1f"
-PLACEHOLDER = "\x00more"
+
+# Marks a node that has not been listed yet ("loading…"). It must not contain
+# a NUL byte: Tcl truncates strings at NUL on Python <= 3.11, which collapsed
+# this id onto its parent and raised "Item already exists" when populating.
+# A leading SEP cannot collide with a real path, since paths come from
+# directory entries and never contain it.
+PLACEHOLDER = SEP + "more"
 
 
 def split_iid(iid: str) -> Tuple[str, str]:

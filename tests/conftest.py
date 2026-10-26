@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import sys
+
 import pytest
 
 try:                                  # a minimal Python may lack Tk
@@ -76,6 +79,13 @@ def tk_root():
     """
     if tk is None:
         pytest.skip("tkinter is not installed")
+
+    # A macOS CI runner has no window server, and Tk there blocks trying to
+    # reach one instead of raising TclError - which hangs the whole job until
+    # its timeout rather than skipping.
+    if sys.platform == "darwin" and os.environ.get("CI"):
+        pytest.skip("macOS CI has no window server")
+
     try:
         root = tk.Tk()
     except tk.TclError as exc:            # no display
