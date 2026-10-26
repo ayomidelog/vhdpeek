@@ -114,6 +114,55 @@ class TestReleaseNotes:
         assert notes.strip()
 
 
+class TestUnwrap:
+    """The release body is rendered by the browser, so it must not be hard-wrapped."""
+
+    def test_prose_becomes_one_line(self):
+        assert release.unwrap("A sentence that was\nwrapped.\n") == \
+            "A sentence that was wrapped."
+
+    def test_paragraphs_stay_separate(self):
+        assert release.unwrap("one\n\ntwo\n") == "one\n\ntwo"
+
+    def test_list_items_keep_their_own_line(self):
+        assert release.unwrap("- one that\n  wraps\n- two\n") == \
+            "- one that wraps\n- two"
+
+    def test_numbered_items_too(self):
+        assert release.unwrap("1. first\n   more\n2. second\n") == \
+            "1. first more\n2. second"
+
+    def test_headings_are_untouched(self):
+        assert release.unwrap("### Added\n\n- x\n") == "### Added\n\n- x"
+
+    def test_tables_are_untouched(self):
+        table = "| a | b |\n|---|---|\n| 1 | 2 |\n"
+        assert release.unwrap(table) == table.strip()
+
+    def test_code_fences_are_verbatim(self):
+        source = "Text.\n\n```\na\nb\n```\n\nAfter.\n"
+        assert release.unwrap(source) == "Text.\n\n```\na\nb\n```\n\nAfter."
+
+    def test_crlf_is_normalised(self):
+        assert "\r" not in release.unwrap("one\r\ntwo\r\n")
+
+    def test_repeated_blank_lines_collapse(self):
+        assert release.unwrap("a\n\n\n\nb\n") == "a\n\nb"
+
+    def test_the_real_notes_have_no_short_wrapped_lines(self):
+        """
+        A prose line ending well before the wrap column is the symptom: it
+        means the next line was a continuation that was not joined.
+        """
+        notes = release.release_notes(release.project_version())
+        for line in notes.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("-", "#", "|", "*")):
+                continue
+            assert len(stripped) > 40 or stripped.endswith((".", ":", "`")), \
+                f"looks hard-wrapped: {stripped!r}"
+
+
 class TestUnreleased:
     def test_entries_under_unreleased_are_reported(self):
         warning = release.unreleased_entries(

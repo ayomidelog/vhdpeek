@@ -97,12 +97,74 @@ def release_notes(version: str, text: Optional[str] = None) -> str:
         if name == version:
             if not body:
                 raise ReleaseError(f"the {version} changelog section is empty")
-            return body
+            return unwrap(body)
 
     known = ", ".join(sorted(found)) or "none"
     raise ReleaseError(
         f"CHANGELOG.md has no section for {version} (found: {known})"
         f"\n  add '## [{version}] - YYYY-MM-DD' with what changed")
+
+
+def unwrap(text: str) -> str:
+    """
+    Join hard-wrapped prose so the release body has one line per paragraph.
+
+    The changelog is wrapped to fit an 80-column editor; a release page is
+    rendered by the browser, where those breaks show up as ragged lines in the
+    middle of a sentence. Markdown structure is preserved:
+
+      * blank lines, headings, list markers, tables and code fences are kept
+      * a continuation line is joined onto the previous one with a space
+      * list items keep their own line, and their continuations join them
+      * fenced code blocks are left exactly as written
+    """
+    out = []
+    in_fence = False
+    previous_open = False      # the previous line can absorb a continuation
+
+    for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = raw.rstrip()
+        stripped = line.strip()
+
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            out.append(line)
+            previous_open = False
+            continue
+
+        if in_fence:
+            out.append(line)
+            continue
+
+        if not stripped:
+            out.append("")
+            previous_open = False
+            continue
+
+        if stripped.startswith(("#", "|")):
+            out.append(line)
+            previous_open = False
+            continue
+
+        if stripped.startswith(("- ", "* ", "+ ")) or re.match(r"^\d+\. ", stripped):
+            out.append(line)
+            previous_open = True
+            continue
+
+        if previous_open and out:
+            # A continuation: append to the line above.
+            out[-1] = out[-1].rstrip() + " " + stripped
+        else:
+            out.append(line)
+            previous_open = True
+
+    # Collapse runs of blank lines left behind.
+    result = []
+    for line in out:
+        if line == "" and result and result[-1] == "":
+            continue
+        result.append(line)
+    return "\n".join(result).strip("\n")
 
 
 def unreleased_body(text: Optional[str] = None) -> str:
@@ -163,7 +225,8 @@ def main(argv: Optional[list] = None) -> int:
             if args.out == "-":
                 print(body)
             else:
-                Path(args.out).write_text(body + "\n", encoding="utf-8")
+                Path(args.out).write_text(body + "\n", encoding="utf-8",
+                                          newline="\n")
                 print(f"wrote {args.out}")
     except ReleaseError as exc:
         print(f"error: {exc}", file=sys.stderr)
