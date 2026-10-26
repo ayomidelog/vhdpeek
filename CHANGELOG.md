@@ -27,6 +27,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Bad input now produces a message instead of a traceback, with a distinct
+  exit code (`2`) and a hint:
+  - a missing file, a directory, an unreadable file;
+  - an unsupported URL scheme (`ftp://`, `smb://`);
+  - an unreachable host or an unresolvable name, reported as *cannot reach
+    <host>* rather than as a missing size;
+  - HTTP 401/403/404/5xx, each named;
+  - a response with no length and no range support.
+- `detect_and_parse` raises `NotAnImage` / `UnknownSize` instead of
+  `ValueError`, and names the first bytes it saw, so a wrong file is
+  identifiable at a glance.
+- `file://` URLs with a Windows drive letter lost the drive (`/C:/...`).
+
 - The **Open URL** dialog opened in the top-left corner of the screen. It is
   now centred over the window that raised it, clamped to stay on screen.
 - The preview used "Consolas" unconditionally, so it fell back to a

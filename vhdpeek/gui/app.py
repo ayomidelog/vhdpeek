@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from typing import Optional
 
+from ..core.errors import VhdPeekError
 from ..core.volume import format_size
 from ..session import ImageInfo, Session
 from . import theme, urldialog
@@ -168,8 +169,20 @@ class App(TreeMixin, CopyMixin):
         self.status_label.configure(text=text)
 
     def _show_error(self, exc: BaseException) -> None:
+        """
+        Report a failure in the status bar.
+
+        A user error (`VhdPeekError`) carries its own readable text; anything
+        else is unexpected, so the type name is kept to make it searchable.
+        """
         self._idle()
-        self._status(f"{type(exc).__name__}: {exc}")
+        if isinstance(exc, VhdPeekError):
+            message = str(exc)
+            if exc.hint:
+                message = f"{message} — {exc.hint}"
+            self._status(message)
+        else:
+            self._status(f"{type(exc).__name__}: {exc}")
 
     def _show_progress(self, done: int, total: int) -> None:
         if total <= 0:

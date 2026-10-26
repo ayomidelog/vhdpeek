@@ -6,6 +6,7 @@ import sys
 from typing import List, Optional
 
 from ..core.containers import detect_and_parse
+from ..core.errors import VhdPeekError
 from ..core.partitions import PartitionView
 from ..core.source import make_source
 from ..core.volume import format_size
@@ -14,7 +15,30 @@ from .args import build_parser
 from .render import info, print_listing, print_partitions, print_tree, stream_file
 
 
+#: A path or URL that could not be read. Distinct from 1, which means the
+#: image was read but the request could not be satisfied (no such partition,
+#: unrecognised filesystem).
+EXIT_SOURCE_ERROR = 2
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    """
+    Run the CLI, reporting user errors instead of raising them.
+
+    A wrong path or an unreachable host is a mistake, not a crash: it gets a
+    message and a hint on stderr, and a distinct exit code so a script can
+    tell "bad input" from "found nothing".
+    """
+    try:
+        return _run(argv)
+    except VhdPeekError as exc:
+        info(f"error: {exc}")
+        if exc.hint:
+            info(f"hint:  {exc.hint}")
+        return EXIT_SOURCE_ERROR
+
+
+def _run(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

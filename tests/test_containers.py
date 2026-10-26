@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from vhdpeek.core.containers import detect_and_parse
+from vhdpeek.core.errors import NotAnImage
 from vhdpeek.core.partitions import PartitionView, parse_partitions
 from vhdpeek.core.source import LocalSource, make_source
 from vhdpeek.core.volume import BytesView, ReaderView
@@ -62,13 +63,13 @@ class TestContainers:
     def test_not_a_disk(self, tmp_path):
         path = tmp_path / "junk.bin"
         path.write_bytes(b"\x00" * 4096)
-        with pytest.raises(ValueError):
+        with pytest.raises(NotAnImage):
             detect_and_parse(LocalSource(str(path)))
 
     def test_truncated_image_rejected(self, tmp_path):
         path = tmp_path / "tiny.bin"
         path.write_bytes(b"conectix")
-        with pytest.raises(ValueError):
+        with pytest.raises(NotAnImage):
             detect_and_parse(LocalSource(str(path)))
 
 # ---------------------------------------------------------------------------

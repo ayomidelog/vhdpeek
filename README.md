@@ -14,12 +14,9 @@ the image without extracting it.
 
 ### Portable Windows exe
 
-No Python required. Download `vhdpeek-<version>-windows-x64.zip` from the
+Download `vhdpeek-<version>-windows-x64.zip` from the
 [releases page](../../releases) and unzip it anywhere. There is one binary,
 `vhdpeek.exe`: double-click it to open the window, or drag an image onto it.
-
-It is a windowed build, so no console appears behind the app - which also
-means it has no stdout, so the command line lives in the installs below.
 
 The exe is self-contained - no installer, no registry, no files left behind.
 Delete it to uninstall. Builds come from
@@ -51,17 +48,19 @@ curl -fsSL https://raw.githubusercontent.com/ayomidelog/vhdpeek/main/install.sh 
     | sh -s -- --uninstall
 ```
 
-
 ### From source
 
+Python 3.9+. Local files need nothing beyond the standard library;
+`requests` is only for `http(s)` sources.
+
 ```bash
-pip install requests        # only needed for http(s) sources
-pip install .               # installs the `vhdpeek` command
+pip install .               # provides the `vhdpeek` command
+pip install .[http]         # ...plus requests, for remote images
+
 python -m vhdpeek disk.vhd --parts   # or run it straight from a checkout
 ```
 
-Python 3.9+. Local files need no third-party packages. To build the exe
-yourself:
+To build the Windows exe yourself:
 
 ```bash
 pip install pyinstaller requests
@@ -69,6 +68,8 @@ python -m PyInstaller --onefile --windowed --name vhdpeek \
     --icon assets/vhdpeek.ico \
     --hidden-import requests --paths . packaging/entry_gui.py
 ```
+
+
 
 ## CLI
 
@@ -105,6 +106,30 @@ nothing installed.
 
 Diagnostics go to stderr, so `--cat` output is byte-exact and safe to pipe into
 `sha256sum`, `tar`, or `qemu-system-x86_64 -kernel`.
+
+### When it cannot open the image
+
+A wrong path, an unreachable host and a 404 are reported as such, with a hint
+and a distinct exit code — no traceback:
+
+```
+$ vhdpeek /tmp/nope.vhd --parts
+error: no such file: /tmp/nope.vhd
+hint:  check the path, or pass an http(s) URL instead
+$ echo $?
+2
+```
+
+| Exit | Meaning |
+|---|---|
+| 0 | success |
+| 1 | the image opened, but the request could not be satisfied (no such partition, unrecognised filesystem) |
+| 2 | the image could not be read: bad path, bad URL, unreachable host, HTTP error, not a VHD/VHDX |
+
+The message distinguishes the cases that are easy to confuse: a refused
+connection is `cannot reach <host>`, not "the server did not report a size";
+a 403 says access was denied, a 404 says the path does not exist. The GUI
+shows the same text in its status bar.
 
 ## GUI
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from vhdpeek.core.containers import detect_and_parse
+from vhdpeek.core.errors import NotAnImage, UnknownSize
 from vhdpeek.core.volume import BytesView
 from vhdpeek.core.containers.vhd import bitmap_size
 from vhdpeek.core.containers.vhdx import guid_string
@@ -51,15 +52,15 @@ class TestDetection:
         assert info.bat_little_endian
 
     def test_unknown_size_is_reported_not_guessed(self):
-        with pytest.raises(ValueError, match="cannot determine image size"):
+        with pytest.raises(UnknownSize, match="cannot determine the image size"):
             detect_and_parse(NoSize(b"\x00" * 2048))
 
     def test_tiny_file_is_rejected(self):
-        with pytest.raises(ValueError, match="too small"):
+        with pytest.raises(NotAnImage, match="too small"):
             detect_and_parse(BytesView(b"\x00" * 100))
 
     def test_random_bytes_are_rejected(self):
-        with pytest.raises(ValueError, match="not a recognised"):
+        with pytest.raises(NotAnImage, match="not a VHD or VHDX"):
             detect_and_parse(BytesView(b"\x00" * 4096))
 
     def test_vhdx_magic_without_regions_is_rejected(self):

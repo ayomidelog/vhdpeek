@@ -21,6 +21,10 @@ from collections import OrderedDict
 from typing import Optional
 from urllib.parse import urlparse
 
+from .errors import (ConnectionFailed, HttpError, PathNotFound,
+                     PathNotReadable, SourceError, UnsupportedScheme,
+                     UnknownSize)
+
 
 class RangeNotSupported(IOError):
     """The server ignored `Range`, so late offsets cannot be read cheaply."""
@@ -128,41 +132,106 @@ class HTTPSource(Source):
     # Size discovery
     # ------------------------------------------------------------------
 
-    def _discover_size(self) -> Optional[int]:
-        """Ask for one byte and read the total out of `Content-Range`."""
-        try:
-            resp = self._session.get(
-                self.url, headers={"Range": "bytes=0-0"},
-                stream=True, timeout=self._timeout,
-            )
-            try:
-                if resp.status_code == 206:
-                    m = re.search(r"/(\d+)\s*$",
-                                  resp.headers.get("Content-Range", ""))
-                    if m:
-                        return int(m.group(1))
-                if resp.status_code == 200:
-                    length = resp.headers.get("Content-Length")
-                    if length is not None:
-                        return int(length)
-            finally:
-                resp.close()
-        except Exception:
-            pass
+    def _discover_size(self) -> int:
+        """
+        Ask for one byte and read the total out of `Content-Range`.
 
+        Failures are reported as themselves. Collapsing a refused connection
+        or a 404 into "the server did not report a size" sends the user
+        looking for the wrong problem.
+        """
+        resp = self._request("GET", self.url,
+                             headers={"Range": "bytes=0-0"}, stream=True)
         try:
-            resp = self._session.head(
-                self.url, allow_redirects=True, timeout=self._timeout
-            )
-            try:
+            if resp.status_code == 206:
+                match = re.search(r"/(\d+)\s*$",
+                                  resp.headers.get("Content-Range", ""))
+                if match:
+                    return int(match.group(1))
+            elif resp.status_code == 200:
                 length = resp.headers.get("Content-Length")
-                if resp.status_code == 200 and length is not None:
+                if length is not None:
                     return int(length)
-            finally:
-                resp.close()
-        except Exception:
-            pass
-        return None
+            else:
+                raise self._http_error(resp)
+        finally:
+            resp.close()
+
+        # The GET worked but carried no length; HEAD sometimes does.
+        resp = self._request("HEAD", self.url, allow_redirects=True)
+        try:
+            length = resp.headers.get("Content-Length")
+            if resp.status_code == 200 and length is not None:
+                return int(length)
+        finally:
+            resp.close()
+
+        raise UnknownSize(
+            f"{self._host} did not report the image size",
+            hint="the server must send Content-Length or a Content-Range "
+                 "header; a chunked response cannot be browsed by range",
+        )
+
+    @property
+    def _host(self) -> str:
+        return urlparse(self.url).netloc or self.url
+
+    def _request(self, method: str, url: str, **kwargs):
+        """
+        One request, with the transport failure translated into a message.
+
+        `requests` raises a hierarchy of its own; the user needs to know
+        whether the host was unreachable, slow, or refusing the certificate.
+        """
+        try:
+            return self._session.request(method, url, timeout=self._timeout,
+                                         **kwargs)
+        except self._requests.exceptions.SSLError as exc:
+            raise ConnectionFailed(
+                f"TLS failed for {self._host}",
+                hint=f"the certificate could not be verified ({exc})",
+            ) from None
+        except self._requests.exceptions.Timeout:
+            raise ConnectionFailed(
+                f"{self._host} did not answer within {self._timeout}s",
+                hint="the host is slow or unreachable; try again",
+            ) from None
+        except self._requests.exceptions.ConnectionError as exc:
+            raise ConnectionFailed(
+                f"cannot reach {self._host}",
+                hint=f"check the host name and your network ({_reason(exc)})",
+            ) from None
+        except self._requests.exceptions.InvalidURL as exc:
+            raise UnsupportedScheme(
+                f"not a usable URL: {self.url}", hint=str(exc)) from None
+
+    def _http_error(self, resp) -> SourceError:
+        """A readable error for a response that is not the image."""
+        status = resp.status_code
+        reason = resp.reason or ""
+        detail = f"{status} {reason}".strip()
+
+        if status in (401, 407):
+            return HttpError(
+                f"{self._host} requires authentication ({detail})",
+                status, hint="the URL may need a token or a signed query string",
+            )
+        if status == 403:
+            return HttpError(
+                f"access to {self._host} was denied ({detail})",
+                status, hint="the credentials are valid but not allowed here",
+            )
+        if status == 404:
+            return HttpError(
+                f"no such file on {self._host} ({detail})",
+                status, hint="check the URL; the path may have changed",
+            )
+        if 500 <= status < 600:
+            return HttpError(
+                f"{self._host} failed ({detail})",
+                status, hint="the problem is on the server; try again later",
+            )
+        return HttpError(f"{self._host} answered {detail}", status)
 
     # ------------------------------------------------------------------
     # Fetching
@@ -185,12 +254,9 @@ class HTTPSource(Source):
     def _get_once(self, offset: int, size: int) -> bytes:
         end = offset + size - 1
         self.requests_made += 1
-        resp = self._session.get(
-            self.url,
-            headers={"Range": f"bytes={offset}-{end}"},
-            stream=True,
-            timeout=self._timeout,
-        )
+        resp = self._request("GET", self.url,
+                             headers={"Range": f"bytes={offset}-{end}"},
+                             stream=True)
         try:
             if resp.status_code == 206:
                 return self._read_stream(resp, size)
@@ -208,7 +274,7 @@ class HTTPSource(Source):
             if resp.status_code == 416:
                 return b""
             resp.raise_for_status()
-            raise IOError(f"unexpected HTTP {resp.status_code}")
+            raise self._http_error(resp)
         finally:
             resp.close()
 
@@ -294,9 +360,106 @@ class HTTPSource(Source):
 
 
 def make_source(path_or_url: str, **kwargs) -> Source:
+    """
+    Open a local path or an http(s) URL.
+
+    Raises a `SourceError` subclass with a readable message when the input is
+    not something this tool can read - an unknown scheme, a missing file, a
+    directory - rather than letting `open()` produce a traceback.
+    """
     parsed = urlparse(path_or_url)
-    if parsed.scheme in ("http", "https"):
+    scheme = parsed.scheme.lower()
+
+    # "C:\\images\\disk.vhd" parses as scheme "c"; a one-letter scheme is a
+    # Windows drive, not a protocol.
+    if scheme in ("http", "https"):
         return HTTPSource(path_or_url, **kwargs)
-    if parsed.scheme == "file":
-        return LocalSource(parsed.path)
-    return LocalSource(path_or_url)
+    if scheme == "file":
+        return LocalSource(_local_path(_file_url_path(parsed)))
+    if scheme and len(scheme) > 1:
+        raise UnsupportedScheme(
+            f"cannot read {scheme}:// URLs",
+            hint="only http(s) URLs and local paths are supported",
+        )
+    return LocalSource(_local_path(path_or_url))
+
+
+def _reason(exc: BaseException) -> str:
+    """
+    The most specific message inside a `requests` connection error.
+
+    `requests` wraps the useful part several levels down ("Name or service not
+    known" lives on the inner urllib3 error), and the outer text is the same
+    for every cause.
+    """
+    seen = set()
+    current: object = exc
+    deepest = str(exc) or type(exc).__name__
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        text = str(current).strip()
+        if text:
+            deepest = text
+        for attribute in ("reason", "args"):
+            nxt = getattr(current, attribute, None)
+            if attribute == "args" and isinstance(nxt, tuple):
+                nxt = nxt[0] if nxt else None
+            if isinstance(nxt, BaseException):
+                current = nxt
+                break
+        else:
+            break
+
+    # urllib3 prefixes the message with the connection it was building
+    # ("HTTPConnection(host='x', port=80): Failed to resolve 'x'"); the part
+    # after the last ": " is the sentence the user needs.
+    if "): " in deepest:
+        deepest = deepest.rsplit("): ", 1)[1]
+    deepest = deepest.strip()
+    # The OS detail is useful but verbose ("[WinError 10061] No connection
+    # could be made because the target machine actively refused it").
+    if len(deepest) > 90:
+        deepest = deepest[:87].rstrip() + "..."
+    return deepest or type(exc).__name__
+
+
+def _file_url_path(parsed) -> str:
+    """
+    The filesystem path inside a `file:` URL.
+
+    On Windows `file:///C:/x.vhd` parses to `/C:/x.vhd`; the leading slash is
+    part of the URL grammar, not the path.
+    """
+    path = parsed.path
+    if os.name == "nt" and re.match(r"^/[A-Za-z]:", path):
+        path = path[1:]
+    return path
+
+
+def _local_path(path: str) -> str:
+    """Check that `path` is a readable file before handing it to `open`."""
+    if not path:
+        raise PathNotFound("no path given")
+
+    expanded = os.path.expanduser(path)
+    if not os.path.exists(expanded):
+        raise PathNotFound(
+            f"no such file: {path}",
+            hint="check the path, or pass an http(s) URL instead",
+        )
+    if os.path.isdir(expanded):
+        raise PathNotReadable(
+            f"{path} is a directory",
+            hint="pass a disk image file, not a folder",
+        )
+    try:
+        with open(expanded, "rb"):
+            pass
+    except PermissionError:
+        raise PathNotReadable(
+            f"permission denied: {path}",
+            hint="check the file's permissions",
+        ) from None
+    except OSError as exc:
+        raise PathNotReadable(f"cannot open {path}: {exc.strerror or exc}") from None
+    return expanded
