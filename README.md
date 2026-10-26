@@ -2,6 +2,7 @@
 
 [![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
+[![build](../../actions/workflows/build-exe.yml/badge.svg)](../../actions/workflows/build-exe.yml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![formats](https://img.shields.io/badge/formats-VHD%20%7C%20VHDX%20%7C%20FAT%20%7C%20NTFS%20%7C%20ext4%20%7C%20ISO%209660-lightgrey)](#supported-formats)
 
@@ -9,40 +10,46 @@ Browse a VHD/VHDX disk image over HTTP or from a local file — no download, no
 mount. Walks partitions and filesystems, and enters an ISO that lives *inside*
 the image without extracting it.
 
-## How it works
-
-Each layer only knows the contract of the one below it, so a filesystem
-parser never learns whether its bytes came from a local file, an HTTP range
-request, or a file inside another filesystem.
-
-```
-http(s) URL ─┐
-             ├──►  core/source.py          bytes at an offset
-local file  ─┘             │
-                           ▼
-                    core/containers/       virtual disk: virtual offset
-                           │               → file offset, holes read as zero
-                           ▼
-                    core/partitions/       byte window over one partition
-                           │
-                           ▼
-                    fs/{fat,ntfs,ext4,iso}/  path-based listing and reads
-                           │
-                           ▼
-                    session/ → cli/, gui/  scopes, mounting, rendering
-```
-
-Because a filesystem reader takes any `ByteView`, nesting needs no special
-case: an ISO inside ext4 is an `fs/iso` reader over a file from the ext4
-reader.
-
 ## Install
+
+### Portable Windows exe
+
+No Python required. Download `vhdpeek-<version>-windows-x64.zip` from the
+[releases page](../../releases), unzip it anywhere, and run either binary:
+
+| Binary | Use it for |
+|---|---|
+| `vhdpeek-gui.exe` | double-click to open the window. Drag an image onto it, or pass a path |
+| `vhdpeek.exe` | the command line below. Keeps a console, so `--cat` can stream to stdout |
+
+The zip is a single self-contained file per binary — no installer, no
+registry, no files left behind. Delete the folder to uninstall. Builds come
+from [`.github/workflows/build-exe.yml`](.github/workflows/build-exe.yml) on
+every tagged release; each one is smoke-tested against generated images before
+it is attached.
+
+```
+vhdpeek-gui.exe D:\images\ubuntu.vhd
+vhdpeek.exe D:\images\ubuntu.vhd --parts
+```
+
+### From source
 
 ```bash
 pip install requests        # only needed for http(s) sources
+python -m vhdpeek disk.vhd --parts
 ```
 
-Python 3.9+. Local files need no third-party packages.
+Python 3.9+. Local files need no third-party packages. To build the exe
+yourself:
+
+```bash
+pip install pyinstaller requests
+python -m PyInstaller --onefile --console --name vhdpeek \
+    --hidden-import requests --paths . packaging/entry_cli.py
+python -m PyInstaller --onefile --windowed --name vhdpeek-gui \
+    --hidden-import requests --paths . packaging/entry_gui.py
+```
 
 ## CLI
 
@@ -253,7 +260,8 @@ vhdpeek/
 │   ├── ext4/             superblock, inode, extents, directory, xattr
 │   └── iso/              records, descriptors, rockridge, directory
 ├── session/              types (ImageInfo, Scope), core (Session)
-├── gui/                  app, tree, copy, background, preview, treeids
+├── gui/                  app, tree, copy, background, preview, treeids,
+│                         theme, urldialog
 └── cli/                  args, render, app
 
 tests/
@@ -268,8 +276,13 @@ tools/
 ├── make_ubuntu_image.py  60 GiB sparse VHD with a nested ISO
 └── bench.py              performance measurements
 
+packaging/
+├── entry_cli.py          frozen console entry point
+└── entry_gui.py          frozen windowed entry point
+
 .github/workflows/
-└── tests.yml             CI: 3 OSes x 5 Python versions, plus a CLI smoke job
+├── tests.yml             CI: 3 OSes x 5 Python versions, plus a CLI smoke job
+└── build-exe.yml         portable Windows binaries, attached to a release
 ```
 
 No module is over 400 lines. Generated images (`test_data/`, `*.vhd`,

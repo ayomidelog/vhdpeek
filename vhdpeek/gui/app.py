@@ -14,6 +14,7 @@ from typing import Optional
 
 from ..core.volume import format_size
 from ..session import ImageInfo, Session
+from . import theme, urldialog
 from .background import Background
 from .copy import CopyMixin
 from .tree import TreeMixin
@@ -32,6 +33,12 @@ class App(TreeMixin, CopyMixin):
         self._token = None
         self._suppress_select = False
 
+        # A saved choice wins over the desktop's, so a toggle survives a
+        # restart.
+        saved = theme.load_preference()
+        self.dark = theme.system_prefers_dark() if saved is None else saved
+        self.palette = theme.palette_for(self.dark)
+
         root.title("vhdpeek")
         root.geometry("1120x720")
         root.minsize(780, 440)
@@ -49,14 +56,26 @@ class App(TreeMixin, CopyMixin):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        style = ttk.Style()
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-        style.configure("Mono.TLabel", font=("Consolas", 9))
+        self.style = ttk.Style(self.root)
+        self.apply_theme()
 
         self._build_toolbar()
         self._build_body()
         self._build_status()
+
+    def apply_theme(self) -> None:
+        """Push the current palette onto every widget that needs telling."""
+        self.palette = theme.palette_for(self.dark)
+        theme.configure_style(self.style, self.palette, self.root)
+        theme.recolor_window(self.root, self.palette)
+        if hasattr(self, "preview"):          # not built yet on first call
+            theme.recolor_text(self.preview, self.palette)
+
+    def toggle_theme(self) -> None:
+        self.dark = not self.dark
+        theme.save_preference(self.dark)
+        self.apply_theme()
+        self._status(f"{self.palette.name.capitalize()} theme")
 
     def _build_toolbar(self) -> None:
         toolbar = ttk.Frame(self.root, padding=(10, 8, 10, 6))
@@ -72,6 +91,8 @@ class App(TreeMixin, CopyMixin):
                    command=self.copy_out).pack(side="left")
         ttk.Button(toolbar, text="Refresh",
                    command=self.refresh).pack(side="left", padx=(6, 0))
+        ttk.Button(toolbar, text="Theme",
+                   command=self.toggle_theme).pack(side="left", padx=(6, 0))
 
         self.info_label = ttk.Label(toolbar, text="", style="Mono.TLabel")
         self.info_label.pack(side="right")
@@ -112,9 +133,10 @@ class App(TreeMixin, CopyMixin):
         preview_frame = ttk.Frame(body)
         ttk.Label(preview_frame, text="Preview").pack(anchor="w")
         self.preview = tk.Text(preview_frame, wrap="none", height=9,
-                               font=("Consolas", 9), state="disabled",
-                               background="#fbfbfb", relief="solid",
-                               borderwidth=1)
+                               font=theme.mono_font(self.root), state="disabled",
+                               relief="solid", borderwidth=1,
+                               highlightthickness=1)
+        theme.recolor_text(self.preview, self.palette)
         preview_scroll = ttk.Scrollbar(preview_frame, orient="vertical",
                                        command=self.preview.yview)
         self.preview.configure(yscrollcommand=preview_scroll.set)
@@ -135,6 +157,7 @@ class App(TreeMixin, CopyMixin):
         self.root.bind("<Control-u>", lambda _e: self.ask_url())
         self.root.bind("<Control-e>", lambda _e: self.copy_out())
         self.root.bind("<F5>", lambda _e: self.refresh())
+        self.root.bind("<Control-t>", lambda _e: self.toggle_theme())
         self.root.bind("<Escape>", lambda _e: self.cancel())
 
     # ------------------------------------------------------------------
@@ -177,34 +200,7 @@ class App(TreeMixin, CopyMixin):
             self.open_path(path)
 
     def ask_url(self) -> None:
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Open image from URL")
-        dialog.transient(self.root)
-        dialog.resizable(True, False)
-
-        ttk.Label(dialog, text="URL (http or https):").pack(
-            anchor="w", padx=12, pady=(12, 4))
-        entry = ttk.Entry(dialog, width=78)
-        entry.pack(fill="x", padx=12)
-        entry.focus_set()
-        ttk.Label(dialog, style="Mono.TLabel", foreground="#666",
-                  text="Only the metadata is fetched, not the image."
-                  ).pack(anchor="w", padx=12, pady=(4, 0))
-
-        buttons = ttk.Frame(dialog)
-        buttons.pack(fill="x", padx=12, pady=12)
-
-        def accept() -> None:
-            url = entry.get().strip()
-            if url:
-                dialog.destroy()
-                self.open_path(url)
-
-        ttk.Button(buttons, text="Open", command=accept).pack(side="right")
-        ttk.Button(buttons, text="Cancel",
-                   command=dialog.destroy).pack(side="right", padx=(0, 6))
-        entry.bind("<Return>", lambda _e: accept())
-        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        urldialog.ask(self.root, self.palette, self.open_path)
 
     def open_path(self, path_or_url: str) -> None:
         if self.background.busy:

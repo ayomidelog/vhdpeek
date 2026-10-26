@@ -20,7 +20,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.gui:
         from ..gui import main as gui_main
-        return gui_main([args.path] if args.path else [])
+        argv = [args.path] if args.path else []
+        if args.theme:
+            argv += ["--theme", args.theme]
+        return gui_main(argv)
 
     if not args.path:
         parser.error("a path or URL is required unless --gui is used")

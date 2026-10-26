@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Portable Windows executables, built by
+  `.github/workflows/build-exe.yml` and attached to each tagged release:
+  `vhdpeek.exe` (console, so `--cat` can stream) and `vhdpeek-gui.exe`
+  (windowed). No Python install required; unzip and run.
+- Dark theme, with a **Theme** button and `Ctrl+T`. The window follows the
+  desktop preference on first run and remembers the choice afterwards.
+  `--theme dark|light` forces a scheme.
+- `--theme` is accepted by `python -m vhdpeek --gui` and by
+  `python -m vhdpeek.gui`.
+
+### Fixed
+
+- The **Open URL** dialog opened in the top-left corner of the screen. It is
+  now centred over the window that raised it, clamped to stay on screen.
+- The preview used "Consolas" unconditionally, so it fell back to a
+  proportional font off Windows and the hex dump stopped lining up. It now
+  picks the first available monospaced family.
+- The placeholder tree id contained a NUL byte, which Tcl truncates on
+  Python <= 3.11 - populating a partition raised `Item ... already exists`.
+- The GUI tests hung for nine minutes on macOS CI, where Tk blocks waiting for
+  a window server instead of raising. They now skip there, and both jobs have
+  a timeout.
+
 ## [0.1.0] - 2026-10-26
 
 First documented release. Everything below already worked before this date;

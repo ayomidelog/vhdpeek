@@ -16,6 +16,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="local image path or http(s) URL")
     parser.add_argument("--gui", action="store_true",
                         help="open the graphical browser instead")
+    parser.add_argument("--theme", choices=["dark", "light"], default=None,
+                        help="GUI colour scheme (default: follow the system)")
     parser.add_argument("--parts", "--list-parts", action="store_true",
                         dest="parts", help="list partitions and stop")
     parser.add_argument("--part", type=int, default=None,
