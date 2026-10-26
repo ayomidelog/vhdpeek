@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+from .. import __version__
+
 FS_CHOICES = ["auto", "ntfs", "fat", "ext", "iso"]
 
 
@@ -12,6 +14,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="vhdpeek",
         description="Browse VHD/VHDX images over HTTP or from a local file.",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"vhdpeek {__version__}",
+                        help="show the version and exit")
     parser.add_argument("path", nargs="?",
                         help="local image path or http(s) URL")
     parser.add_argument("--gui", action="store_true",

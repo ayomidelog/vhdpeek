@@ -115,6 +115,51 @@ class TestConsoleScripts:
         assert command_main is module_main
 
 
+class TestVersionFlag:
+    """`--version` must report what the package actually is."""
+
+    def test_package_exposes_a_version(self):
+        import vhdpeek
+
+        assert vhdpeek.__version__
+
+    def test_version_matches_pyproject(self):
+        import vhdpeek
+
+        match = re.search(r'^version = "([^"]+)"$',
+                          read_pyproject(), re.M)
+        assert match
+        assert vhdpeek.__version__ == match.group(1)
+
+    def test_cli_prints_it_and_exits_zero(self, capsys):
+        from vhdpeek.cli import main
+
+        with pytest.raises(SystemExit) as caught:
+            main(["--version"])
+        assert caught.value.code == 0
+
+        captured = capsys.readouterr()
+        import vhdpeek
+
+        assert vhdpeek.__version__ in captured.out
+        assert captured.out.strip().startswith("vhdpeek ")
+
+    def test_version_needs_no_image(self, capsys):
+        """It must work before any file or URL is named."""
+        from vhdpeek.cli import main
+
+        with pytest.raises(SystemExit) as caught:
+            main(["--version"])
+        assert caught.value.code == 0
+
+    def test_the_flag_is_listed_in_help(self, capsys):
+        from vhdpeek.cli import main
+
+        with pytest.raises(SystemExit):
+            main(["--help"])
+        assert "--version" in capsys.readouterr().out
+
+
 class TestInstallScript:
     def test_exists_and_has_a_shebang(self):
         text = (ROOT / "install.sh").read_text(encoding="utf-8")

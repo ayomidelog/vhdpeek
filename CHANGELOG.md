@@ -13,54 +13,40 @@ which was the state of the tool before it had an installer or a binary.
 
 ### Added
 
-- **A portable Windows executable.** One windowed binary, `vhdpeek.exe`: no
-  Python required, no console window behind the app. Attached to the release
-  both bare and zipped.
-- **`install.sh`**, a one-line installer for Linux and macOS that puts the
-  `vhdpeek` command in `~/.local/bin` without touching the system Python, and
-  uninstalls with `--uninstall`.
+- **A portable Windows executable** - one windowed binary, no Python required,
+  no console window. Attached bare and zipped.
+- **`install.sh`**, a one-line installer for Linux and macOS, with
+  `--uninstall`.
 - **`pyproject.toml`**, so `pip install .` provides the `vhdpeek` command.
-  There is one command; `--gui` opens the window.
-- **Dark theme**, with a Theme button and `Ctrl+T`. The window follows the
-  desktop preference on first run and remembers the choice afterwards;
-  `--theme dark|light` forces a scheme.
-- **A release workflow** triggered by a `vX.Y.Z` tag. It validates the tag
-  against `pyproject.toml` and the changelog, runs the test suite on the tag,
-  builds the exe plus sdist and wheel, and creates the GitHub release with the
-  changelog section as its notes. GitHub only - no external package index.
-- **`tools/release.py`**, so those checks run before tagging rather than only
-  in CI.
-- **The app icon**, generated from `assets/vhd_ico.png` by `tools/make_icon.py`
-  and embedded in the executable. All images live under `assets/`.
+  One command; `--gui` opens the window. `--version` reports the version.
+- **Dark theme**, following the desktop preference on first run and
+  remembering the choice afterwards; `--theme dark|light` forces a scheme.
+- **A release workflow** triggered by a tag: validate, test, build, publish to
+  GitHub. `tools/release.py` runs the same checks locally.
 
 ### Changed
 
-- **One executable, not two.** The console build is gone: a windowed exe has
-  no stdout, so it could never have offered `--cat` anyway. The command line
-  stays available through `pip install` and `install.sh`.
+- **One executable, not two.** A windowed exe has no stdout, so the console
+  build could never have offered `--cat`; the command line stays available
+  through `pip install` and `install.sh`.
 - **Bad input is reported, not raised.** A missing file, a directory, an
-  unsupported scheme, an unreachable host and every HTTP error now produce a
-  message with a hint and exit code 2, instead of a traceback. Previously a
-  refused connection and a 404 both surfaced as "the server did not report
-  Content-Length", which pointed at the wrong problem.
+  unsupported scheme, an unreachable host and every HTTP error produce a
+  message with a hint and exit code 2. Previously a refused connection and a
+  404 both surfaced as "the server did not report Content-Length".
 - `detect_and_parse` raises `NotAnImage` / `UnknownSize` rather than
   `ValueError`, and names the first bytes it saw.
-- The GUI tests skip on macOS CI, where Tk blocks waiting for a window server
-  instead of raising, and both CI jobs carry a timeout.
 
 ### Fixed
 
-- The **Open URL** dialog opened in the screen's top-left corner. It is now
-  centred over the window that raised it, clamped to stay on screen.
-- The placeholder tree id contained a NUL byte, which Tcl truncates on
-  Python <= 3.11: populating a partition raised `Item ... already exists`.
-- The preview used "Consolas" unconditionally, so off Windows it fell back to
-  a proportional font and the hex dump stopped lining up.
+- The **Open URL** dialog opened in the screen's top-left corner; it is now
+  centred over its parent.
+- A NUL byte in the placeholder tree id truncated under Tcl on Python <= 3.11,
+  so populating a partition raised `Item ... already exists`.
+- The preview used "Consolas" unconditionally, so the hex dump stopped lining
+  up off Windows.
 - `file://` URLs with a Windows drive letter lost the drive.
-- `vhdpeek.exe --help` opened the window and then reported that no such file
-  existed, because `--help` was taken for a filename.
-- Building the four-partition test fixture held several copies of a 200 MiB
-  disk at once, failing on a machine under memory pressure.
+- `vhdpeek.exe --help` opened the window and reported no such file, because
+  `--help` was taken for a filename.
 
 ## [0.1.0] - 2026-10-26
 

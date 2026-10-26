@@ -261,7 +261,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
-296 tests. Fixture images are generated from the published on-disk layouts
+301 tests. Fixture images are generated from the published on-disk layouts
 (`tests/fixtures/`), not by the code under test, and `TestGenerators`
 re-validates those bytes with independent third-party readers.
 

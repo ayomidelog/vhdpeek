@@ -50,18 +50,22 @@ def gui_images(tmp_path_factory) -> dict:
 
     # A four-partition GPT disk, the shape of a real Ubuntu cloud image:
     # BIOS boot (no filesystem), EFI (FAT32), /boot (ext4), root (ext4).
+    #
+    # The offsets are small, not the real ones. A cloud image puts root at
+    # sector 409600, which makes the fixture 200 MiB of mostly zeros - a cost
+    # every test pays for a layout that only cares about the partition order.
     efi = fsgen.build_fat32({"EFI/": b"", "EFI/BOOT/": b"",
                              "EFI/BOOT/BOOTX64.EFI": b"MZ" + b"\x00" * 64})
     boot = fsgen.build_ext4({"grub.cfg": b"set timeout=0\n"})
     root = fsgen.build_ext4(UBUNTU_LIKE)
     paths["four"].write_bytes(vhdgen.wrap_fixed_vhd(vhdgen.assemble_disk_multi([
-        (2048, b"\x00" * (4 << 20), 0x83,
+        (2048, b"\x00" * (64 << 10), 0x83,
          "21686148-6449-6E6F-744E-656564454649", "BIOS boot"),
-        (10240, efi, 0xEF,
+        (4096, efi, 0xEF,
          "C12A7328-F81F-11D2-BA4B-00A0C93EC93B", "EFI System"),
-        (227328, boot, 0x83,
+        (6144, boot, 0x83,
          "BC13C2FF-59E6-4262-A352-B275FD6F7172", "Linux extended boot"),
-        (409600, root, 0x83,
+        (8192, root, 0x83,
          "0FC63DAF-8483-4772-8E79-3D69D8477DE4", "Linux filesystem"),
     ])))
 
