@@ -1,4 +1,4 @@
-<img src="assets/vhdpeek.png" alt="VHDPeek" width="70%">
+<img src="assets/vhdpeek.png" alt="VHDPeek" width="80%">
 
 [![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
