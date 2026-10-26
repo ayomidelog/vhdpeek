@@ -285,11 +285,6 @@ packaging/
 └── build-exe.yml         portable Windows binaries, attached to a release
 ```
 
-No module is over 400 lines. Generated images (`test_data/`, `*.vhd`,
-`*.vhdx`, `*.img`, `*.iso`) are gitignored — they are build products, not
-source. Docs live at the top level: [CONTRIBUTING.md](CONTRIBUTING.md),
-[CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md) and
-[LICENSE](LICENSE).
 
 ## Contributing
 
