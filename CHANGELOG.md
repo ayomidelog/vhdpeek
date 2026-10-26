@@ -8,7 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- A release workflow (`release.yml`), triggered by a `vX.Y.Z` tag. It
+- A release workflow (`release.yml`), triggered by a `vX.Y.Z` tag. It attaches
+  the exe both bare and zipped, alongside the sdist and wheel. It
   validates the tag against `pyproject.toml` and the changelog, runs the test
   suite on the tag, builds the exe plus sdist and wheel, and creates the
   GitHub release with the changelog section as its notes. GitHub only - no

@@ -206,3 +206,19 @@ class TestWorkflows:
         """One owner for release creation: release.yml."""
         text = self.workflow("build-exe.yml")
         assert "gh release" not in text
+
+    def test_the_release_ships_the_bare_exe_and_a_zip(self):
+        """Both, because some downloaders want a file and some want an archive."""
+        text = self.workflow("release.yml")
+        assert "windows-x64.exe" in text
+        assert "windows-x64.zip" in text
+
+    def test_the_zip_contains_only_the_exe(self):
+        text = self.workflow("release.yml")
+        assert 'z.write(src, "vhdpeek.exe")' in text
+
+    def test_assets_are_named_from_the_version(self):
+        """A release asset must not carry a hardcoded version."""
+        text = self.workflow("release.yml")
+        assert "vhdpeek-{version}" in text
+        assert "vhdpeek-0." not in text

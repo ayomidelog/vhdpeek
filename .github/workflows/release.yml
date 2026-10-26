@@ -116,18 +116,26 @@ jobs:
           set -euo pipefail
           version="${{ needs.validate.outputs.version }}"
 
-          # The exe ships zipped, as one file to download and unzip; the
-          # sdist and wheel ship as built. `zipfile` rather than the `zip`
-          # binary, which is not on every runner image.
+          # The exe ships twice: bare, for anyone who just wants to run it,
+          # and zipped, because a download that unpacks is what some browsers
+          # and corporate proxies expect. The sdist and wheel ship as built.
+          # `zipfile` rather than the `zip` binary, which is not on every
+          # runner image.
           python - <<'PY'
-          import os, zipfile
+          import os, shutil, zipfile
           version = os.environ["VERSION"]
           src = "assets-downloaded/vhdpeek-windows-x64/vhdpeek.exe"
-          dst = f"release/vhdpeek-{version}-windows-x64.zip"
           os.makedirs("release", exist_ok=True)
-          with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+
+          bare = f"release/vhdpeek-{version}-windows-x64.exe"
+          shutil.copyfile(src, bare)
+
+          zipped = f"release/vhdpeek-{version}-windows-x64.zip"
+          with zipfile.ZipFile(zipped, "w", zipfile.ZIP_DEFLATED) as z:
               z.write(src, "vhdpeek.exe")
-          print(f"{dst}: {os.path.getsize(dst):,} bytes")
+
+          for path in (bare, zipped):
+              print(f"{path}: {os.path.getsize(path):,} bytes")
           PY
 
           cp assets-downloaded/dist/* release/

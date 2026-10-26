@@ -14,9 +14,10 @@ the image without extracting it.
 
 ### Portable Windows exe
 
-Download `vhdpeek-<version>-windows-x64.zip` from the
-[releases page](../../releases) and unzip it anywhere. There is one binary,
-`vhdpeek.exe`: double-click it to open the window, or drag an image onto it.
+From the [releases page](../../releases), take either
+`vhdpeek-<version>-windows-x64.exe` and run it, or the `.zip` and unzip it
+somewhere permanent. There is one binary, `vhdpeek.exe`: double-click it to
+open the window, or drag an image onto it.
 
 The exe is self-contained - no installer, no registry, no files left behind.
 Delete it to uninstall. Builds come from
@@ -379,7 +380,8 @@ git push origin v0.2.0
 
 | Asset | What it is |
 |---|---|
-| `vhdpeek-<version>-windows-x64.zip` | the portable exe, unzip and run |
+| `vhdpeek-<version>-windows-x64.exe` | the portable exe, ready to run |
+| `vhdpeek-<version>-windows-x64.zip` | the same exe, zipped |
 | `vhdpeek-<version>.tar.gz` | source distribution |
 | `vhdpeek-<version>-py3-none-any.whl` | wheel |
 
